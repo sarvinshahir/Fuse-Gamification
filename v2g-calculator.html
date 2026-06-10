@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V2G Value Calculator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      color: #222;
+      min-height: 100vh;
+      padding: 48px 24px 80px;
+    }
+
+    h1 {
+      font-family: Arial, sans-serif;
+      font-size: 2.8rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 12px;
+      color: #0d1f3c;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #5a6a7e;
+      font-size: 1rem;
+      margin-bottom: 48px;
+    }
+
+    .form-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      max-width: 720px;
+      margin: 0 auto 32px;
+      padding: 32px 36px;
+    }
+
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: #2a7de1;
+      margin-bottom: 20px;
+    }
+
+    .question {
+      margin-bottom: 28px;
+    }
+
+    .question:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1a2a3a;
+    }
+
+    label .hint {
+      font-weight: 400;
+      color: #7a8a9a;
+      font-size: 0.85rem;
+      margin-left: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #dde3ea;
+      border-radius: 6px;
+      font-family: Arial, sans-serif;
+      font-size: 0.95rem;
+      color: #222;
+      background: #fafbfc;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus {
+      border-color: #2a7de1;
+      background: #fff;
+    }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .radio-group, .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .radio-group label, .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 400;
+      font-size: 0.92rem;
+      color: #333;
+      cursor: pointer;
+      background: #f4f6f9;
+      border: 1.5px solid #dde3ea;
+      border-radius: 6px;
+      padding: 8px 14px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .radio-group input[type="radio"],
+    .checkbox-group input[type="checkbox"] {
+      width: auto;
+      accent-color: #2a7de1;
+    }
+
+    .radio-group label:has(input:checked),
+    .checkbox-group label:has(input:checked) {
+      border-color: #2a7de1;
+      background: #eaf2fd;
+      color: #0d4a9e;
+      font-weight: 600;
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: #2a7de1;
+    }
+
+    .range-value {
+      min-width: 52px;
+      text-align: right;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #2a7de1;
+    }
+
+    .actions {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 14px;
+      justify-content: flex-end;
+    }
+
+    button {
+      font-family: Arial, sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 12px 28px;
+      border-radius: 7px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    button:active { transform: scale(0.97); }
+
+    .btn-secondary {
+      background: #eaf2fd;
+      color: #2a7de1;
+    }
+
+    .btn-primary {
+      background: #2a7de1;
+      color: #fff;
+    }
+
+    button:hover { opacity: 0.88; }
+
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      background: #1a3a1a;
+      color: #7eff7e;
+      font-family: Arial, sans-serif;
+      font-size: 0.88rem;
+      padding: 12px 20px;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    .fuse-logo {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      height: 40px;
+      width: auto;
+      opacity: 0.85;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>V2G Value Calculator</h1>
+
+  <form id="v2gForm">
+
+    <!-- Section 1: Vehicle -->
+    <div class="form-card">
+      <div class="section-label">1 — Your Vehicle</div>
+
+      <div class="question">
+        <label for="vehicleType">Do you currently own or lease an electric vehicle?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="vehicleType" value="bev"> Full BEV</label>
+          <label><input type="radio" name="vehicleType" value="phev"> Plug-in Hybrid (PHEV)</label>
+          <label><input type="radio" name="vehicleType" value="none"> Not yet</label>
+          <label><input type="radio" name="vehicleType" value="planning"> Planning to buy</label>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="vehicleMake">Vehicle make &amp; model <span class="hint">(e.g. Nissan Leaf, Ford F-150 Lightning)</span></label>
+        <input type="text" id="vehicleMake" name="vehicleMake" placeholder="Enter vehicle name">
+      </div>
+
+      <div class="question">
+        <label for="batteryCapacity">Approximate battery capacity <span class="hint">(kWh)</span></label>
+        <div class="range-row">
+          <input type="range" id="batteryCapacity" name="batteryCapacity" min="10" max="150" step="5" value="60"
+            oninput="document.getElementById('batteryVal').textContent = this.value + ' kWh'">
+          <span class="range-value" id="batteryVal">60 kWh</span>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="v2gReady">Is your vehicle V2G / bidirectional charging capable?</label>
+        <select id="v2gReady" name="v2gReady">
+          <option value="">— Select —</option>
+          <option value="yes">Yes — confirmed bidirectional capable</option>
+          <option value="no">No</option>
+          <option value="unsure">Not sure</option>
+          <option value="upcoming">Not yet, but upcoming model will be</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Section 2: Charging & Home Setup -->
+    <div class="form-card">
+      <div class="section-label">2 — Charging &amp; Home Setup</div>
+
+      <div class="question">
+        <label>Where do you primarily charge?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="chargeLocation" value="home"> Home</label>
+          <label><input type="radio" name="chargeLocation" value="work"> Workplace</label>
+          <label><input type="radio" name="chargeLocation" value="public"> Public network</label>
+          <label><input type="radio" name="chargeLocation" value="mixed"> Mix of locations</label>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="chargerType">Home charger type</label>
+        <select id="chargerType" name="chargerType">
+          <option value="">— Select —</option>
+          <option value="3pin">Standard 3-pin socket (~2.3 kW)</option>
+          <option value="ac7">AC 7 kW (single phase)</option>
+          <option value="ac22">AC 22 kW (three phase)</option>
+          <option value="dc">DC fast charger</option>
+          <option value="none">No home charger</option>
+        </select>
+      </div>
+
+      <div class="question">
+        <label>Do you have solar panels installed?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="solar" value="yes"> Yes</label>
+          <label><input type="radio" name="solar" value="no"> No</label>
+          <label><input type="radio" name="solar" value="planned"> Planned within 12 months</label>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="solarCapacity">Solar system capacity <span class="hint">(kWp — leave blank if none)</span></label>
+        <input type="number" id="solarCapacity" name="solarCapacity" min="0" max="100" step="0.5" placeholder="e.g. 6.6">
+      </div>
+
+      <div class="question">
+        <label>Do you have a home battery storage system?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="homeBattery" value="yes"> Yes</label>
+          <label><input type="radio" name="homeBattery" value="no"> No</label>
+          <label><input type="radio" name="homeBattery" value="planned"> Planned</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Usage Patterns -->
+    <div class="form-card">
+      <div class="section-label">3 — Usage Patterns</div>
+
+      <div class="question">
+        <label for="dailyKm">Average daily driving distance <span class="hint">(km)</span></label>
+        <div class="range-row">
+          <input type="range" id="dailyKm" name="dailyKm" min="0" max="300" step="5" value="50"
+            oninput="document.getElementById('dailyKmVal').textContent = this.value + ' km'">
+          <span class="range-value" id="dailyKmVal">50 km</span>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="hoursParked">Hours per day vehicle is parked at home</label>
+        <div class="range-row">
+          <input type="range" id="hoursParked" name="hoursParked" min="0" max="24" step="1" value="14"
+            oninput="document.getElementById('hoursParkedVal').textContent = this.value + ' hrs'">
+          <span class="range-value" id="hoursParkedVal">14 hrs</span>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="tariffType">Electricity tariff type</label>
+        <select id="tariffType" name="tariffType">
+          <option value="">— Select —</option>
+          <option value="flat">Flat rate</option>
+          <option value="tou">Time-of-use (TOU)</option>
+          <option value="dynamic">Dynamic / smart pricing</option>
+          <option value="ev">EV-specific tariff</option>
+          <option value="unknown">Don't know</option>
+        </select>
+      </div>
+
+      <div class="question">
+        <label for="avgElecRate">Average electricity rate <span class="hint">(¢/kWh)</span></label>
+        <input type="number" id="avgElecRate" name="avgElecRate" min="0" max="100" step="0.1" placeholder="e.g. 28">
+      </div>
+
+      <div class="question">
+        <label for="monthlyBill">Approximate monthly electricity bill <span class="hint">(AUD $)</span></label>
+        <input type="number" id="monthlyBill" name="monthlyBill" min="0" max="2000" step="10" placeholder="e.g. 180">
+      </div>
+    </div>
+
+    <!-- Section 4: V2G Interest -->
+    <div class="form-card">
+      <div class="section-label">4 — V2G Interest &amp; Goals</div>
+
+      <div class="question">
+        <label>What are your primary motivations for V2G? <span class="hint">(select all that apply)</span></label>
+        <div class="checkbox-group">
+          <label><input type="checkbox" name="motivation" value="bill_reduction"> Reduce electricity bill</label>
+          <label><input type="checkbox" name="motivation" value="export_income"> Earn income exporting energy</label>
+          <label><input type="checkbox" name="motivation" value="grid_resilience"> Support grid resilience</label>
+          <label><input type="checkbox" name="motivation" value="backup_power"> Home backup power</label>
+          <label><input type="checkbox" name="motivation" value="environment"> Environmental impact</label>
+          <label><input type="checkbox" name="motivation" value="early_adopter"> Early adopter / curiosity</label>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="minSocReserve">Minimum battery state-of-charge you'd reserve for driving <span class="hint">(%)</span></label>
+        <div class="range-row">
+          <input type="range" id="minSocReserve" name="minSocReserve" min="10" max="80" step="5" value="30"
+            oninput="document.getElementById('minSocVal').textContent = this.value + '%'">
+          <span class="range-value" id="minSocVal">30%</span>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="gridParticipation">Would you be comfortable with your car automatically discharging to the grid?</label>
+        <select id="gridParticipation" name="gridParticipation">
+          <option value="">— Select —</option>
+          <option value="full_auto">Yes — fully automated is fine</option>
+          <option value="scheduled">Yes — but on a fixed schedule I set</option>
+          <option value="manual_approval">Only with manual approval each time</option>
+          <option value="no">No — not comfortable with discharging</option>
+        </select>
+      </div>
+
+      <div class="question">
+        <label for="batteryDegradationConcern">How concerned are you about battery degradation from V2G cycling?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="batteryDegradationConcern" value="not_concerned"> Not concerned</label>
+          <label><input type="radio" name="batteryDegradationConcern" value="somewhat"> Somewhat concerned</label>
+          <label><input type="radio" name="batteryDegradationConcern" value="very"> Very concerned</label>
+          <label><input type="radio" name="batteryDegradationConcern" value="dealbreaker"> Dealbreaker if risk exists</label>
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="additionalNotes">Any additional context or questions? <span class="hint">(optional)</span></label>
+        <textarea id="additionalNotes" name="additionalNotes" placeholder="e.g. I'm on a strata property, unsure about charger installation..."></textarea>
+      </div>
+    </div>
+
+  </form>
+
+  <div class="actions">
+    <button type="button" class="btn-secondary" onclick="resetForm()">Clear</button>
+    <button type="button" class="btn-primary" onclick="exportJSON()">Export to JSON</button>
+  </div>
+
+  <div class="toast" id="toast">JSON downloaded</div>
+  <img src="images/FuseLogoSVG.svg" alt="Fuse" class="fuse-logo">
+
+
+  <script>
+    function collectData() {
+      const form = document.getElementById('v2gForm');
+      const data = { timestamp: new Date().toISOString() };
+
+      // Single-value inputs
+      ['vehicleMake','batteryCapacity','v2gReady','chargerType','solarCapacity',
+       'homeBattery','dailyKm','hoursParked','tariffType','avgElecRate',
+       'monthlyBill','minSocReserve','gridParticipation','additionalNotes'].forEach(name => {
+        const el = form.elements[name];
+        if (el) data[name] = el.value || null;
+      });
+
+      // Radio groups
+      ['vehicleType','chargeLocation','solar','batteryDegradationConcern'].forEach(name => {
+        const checked = form.querySelector(`input[name="${name}"]:checked`);
+        data[name] = checked ? checked.value : null;
+      });
+
+      // Checkbox group (motivations)
+      data.motivations = Array.from(
+        form.querySelectorAll('input[name="motivation"]:checked')
+      ).map(cb => cb.value);
+
+      return data;
+    }
+
+    function exportJSON() {
+      const data = collectData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `v2g-responses-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function resetForm() {
+      document.getElementById('v2gForm').reset();
+      document.getElementById('batteryVal').textContent   = '60 kWh';
+      document.getElementById('dailyKmVal').textContent   = '50 km';
+      document.getElementById('hoursParkedVal').textContent = '14 hrs';
+      document.getElementById('minSocVal').textContent    = '30%';
+    }
+  </script>
+
+  
+</body>
+</html>
