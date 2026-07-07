@@ -1,0 +1,16 @@
+{
+  "name": "fuse-v2g-fleet-wizard",
+  "version": "1.0.0",
+  "description": "V2G fleet onboarding wizard - static frontend + Express/SQLite backend",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
