@@ -537,7 +537,7 @@ window.FuseScene = (function () {
   function showFleetGrid(heavyCount, mediumCount) {
     [...trucks.children].forEach(t => trucks.remove(t));
     const count = heavyCount + mediumCount;
-    const spacingX = 3.5, spacingZ = 8;
+    const spacingX = 4, spacingZ = 10;
     const cols = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));
     const rows = Math.ceil(count / cols);
     const startX = -((cols - 1) * spacingX) / 2;
@@ -549,7 +549,8 @@ window.FuseScene = (function () {
         truck.position.set(startX + c * spacingX * truckScale, 0, startZ + r * spacingZ * truckScale);
         truck.scale.setScalar(0.001);
         trucks.add(truck);
-        setTimeout(() => truck.scale.setScalar(truckScale), placed * 30);
+        // setTimeout(() => truck.scale.setScalar(truckScale), placed * 30);
+        setTimeout(() =>  popIn(truck, 200), placed * 20)
         placed++;
       }
     }
