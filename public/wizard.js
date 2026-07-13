@@ -72,7 +72,7 @@
         applyDepotState();
         break;
       case 6:
-        FuseScene.citySetEvFraction(state.evPercent / 100);
+        FuseScene.SetEvFraction(state.evPercent / 100);
         break;
       case 7:
         renderSummary();
@@ -269,7 +269,7 @@
 
   function syncEvTrucks() {
     if (currentStep !== 6) return;
-    FuseScene.citySetEvFraction(state.evPercent / 100);
+    FuseScene.SetEvFraction(state.evPercent / 100);
   }
 
   evPercentEl.addEventListener('input', updateEvUI);
@@ -278,7 +278,53 @@
   // ---------- step 7: review + submit ----------
   const YES_NO = v => (v === null ? '—' : v ? 'Yes' : 'No');
 
+  // Placeholder market/vehicle assumptions — tune to real figures.
+  const VALUE_ASSUMPTIONS = {
+    heavyKwhPerKm: 1.8,        // full-size (heavy duty) bus energy use
+    mediumKwhPerKm: 0.9,       // cutaway (medium duty) bus energy use
+    chargerKw: 40,             // depot charger power rating
+    pricePerKwh: 1.5,         // $ paid per kWh of V2G energy sold back to the grid
+    heavyVehicleCost: 500000,  // incremental EV cost vs. diesel, heavy duty
+    mediumVehicleCost: 150000,  // incremental EV cost vs. diesel, medium duty
+    daysPerYear: 365,
+  };
+
+  // #EVs = fleetSize * %EVs
+  // powerConsumed = distance * vehicle energy consumption
+  // rechargeTime = powerConsumed / chargerKw
+  // V2G uptime = 24 - operatingHours - rechargeTime
+  // kWhReturned = V2G uptime / 2 * chargerKw
+  // value = days * #EVs * kWhReturned * $/kWh - vehicleCost * #EVs
+  function valueForFleet(count, kwhPerKm, vehicleCost) {
+    const evCount = Math.round(count * (state.evPercent / 100));
+    if (evCount <= 0) return 0;
+    const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
+    const powerConsumed = state.avgDistanceKm * kwhPerKm;
+    const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
+    const v2gUptime = Math.max(0, 24 - operatingHours - rechargeTime);
+    const kWhReturned = (v2gUptime) * VALUE_ASSUMPTIONS.chargerKw;
+    return VALUE_ASSUMPTIONS.daysPerYear * evCount * kWhReturned * VALUE_ASSUMPTIONS.pricePerKwh
+      - vehicleCost * evCount;
+  }
+
+  function computeExpectedValue() {
+    return valueForFleet(state.heavyCount, VALUE_ASSUMPTIONS.heavyKwhPerKm, VALUE_ASSUMPTIONS.heavyVehicleCost)
+      + valueForFleet(state.mediumCount, VALUE_ASSUMPTIONS.mediumKwhPerKm, VALUE_ASSUMPTIONS.mediumVehicleCost);
+  }
+
+  function renderValueCallout() {
+    const expectedValue = computeExpectedValue();
+    const amountEl = document.getElementById('valueAmount');
+    const formatted = expectedValue.toLocaleString('en-CA', {
+      style: 'currency', currency: 'CAD', maximumFractionDigits: 0,
+    });
+    amountEl.textContent = formatted;
+    amountEl.classList.toggle('negative', expectedValue < 0);
+  }
+
   function renderSummary() {
+    renderValueCallout();
+    const totalEVs = Math.round((state.heavyCount + state.mediumCount) * (state.evPercent / 100));
     const rows = [
       ['Company', state.companyName || '—'],
       ['Location', state.location || '—'],
@@ -292,6 +338,7 @@
       ['Operating hours', `${formatHour(state.opsStartHour)} – ${formatHour(state.opsEndHour)}`],
       ['Average distance/day', `${state.avgDistanceKm} km`],
       ['EV percentage', `${state.evPercent}%`],
+      ['Electric vehicles', totalEVs],
     ];
     const summaryEl = document.getElementById('summary');
     summaryEl.innerHTML = rows.map(([k, v]) =>

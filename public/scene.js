@@ -2,7 +2,7 @@
 // One renderer/camera/ground; steps toggle which group is visible and
 // drive small animations (day/night, scenery pop-in).
 window.FuseScene = (function () {
-  let renderer, camera, scene;
+  let renderer, camera, scene, canvasEl;
   let ambLight, sunLight;
   let toonGradient;
   let groups = {};
@@ -322,7 +322,7 @@ window.FuseScene = (function () {
   // ---------- groups ----------
   function buildSplashGroup() {
     const g = new THREE.Group();
-    splashCar = makeFullSizeBus(0.9);
+    splashCar = makeFullSizeBus(0.5);
     g.add(splashCar);
     return g;
   }
@@ -681,7 +681,13 @@ window.FuseScene = (function () {
   }
 
   function onMouseMove(e) {
-    mouseNDC.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    // use the canvas's actual on-screen rect rather than raw viewport size,
+    // since CSS may nudge/transform the canvas off its default (0,0) origin
+    const rect = canvasEl.getBoundingClientRect();
+    mouseNDC.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
   }
 
   let lastTime = performance.now();
@@ -720,6 +726,7 @@ window.FuseScene = (function () {
   }
 
   function init(canvas) {
+    canvasEl = canvas;
     toonGradient = makeToonGradient(4);
 
     scene = new THREE.Scene();
@@ -755,8 +762,8 @@ window.FuseScene = (function () {
       new THREE.PlaneGeometry(140, 140),
       toonMat(0xffffff)
     );
-    ground.rotation.x = -Math.PI / 2;
-    // ground.receiveShadow = true;
+
+    ground.visible = false;
     scene.add(ground);
 
     groups.splash = buildSplashGroup();

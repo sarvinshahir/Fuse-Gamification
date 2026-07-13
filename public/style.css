@@ -44,7 +44,7 @@ html, body {
   transition: background 0.2s, transform 0.2s;
 }
 
-.progress .dot.done   { background: #2a7de1; }
+.progress .dot.done   { background: #0000ff; }
 .progress .dot.active { background: #fff; transform: scale(1.3); }
 
 #wizard {
@@ -111,7 +111,7 @@ html, body {
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: #2a7de1;
+  color: #0000ff;
   margin-bottom: 20px;
 }
 
@@ -150,7 +150,7 @@ select {
 
 input[type="text"]:focus,
 input[type="number"]:focus,
-select:focus { border-color: #2a7de1; background: #fff; }
+select:focus { border-color: #0000ff; background: #fff; }
 
 .radio-group, .checkbox-group {
   display: flex;
@@ -178,7 +178,7 @@ select:focus { border-color: #2a7de1; background: #fff; }
 
 .radio-group label:has(input:checked),
 .checkbox-group label:has(input:checked) {
-  border-color: #2a7de1;
+  border-color: #0000ff;
   background: #eaf2fd;
   color: #0d4a9e;
   font-weight: 600;
@@ -201,7 +201,7 @@ select:focus { border-color: #2a7de1; background: #fff; }
 .counter {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #2a7de1;
+  color: #0000ff;
   margin-top: 8px;
 }
 
@@ -215,7 +215,7 @@ select:focus { border-color: #2a7de1; background: #fff; }
 .dual-range-fill {
   position: absolute;
   height: 6px;
-  background: #2a7de1;
+  background: #0000ff;
   border-radius: 4px;
 }
 .dual-range input[type="range"] {
@@ -246,7 +246,7 @@ select:focus { border-color: #2a7de1; background: #fff; }
   height: 18px;
   border-radius: 50%;
   background: #fff;
-  border: 3px solid #2a7de1;
+  border: 3px solid #0000ff;
   cursor: pointer;
   margin-top: -6px;
 }
@@ -256,7 +256,7 @@ select:focus { border-color: #2a7de1; background: #fff; }
   height: 18px;
   border-radius: 50%;
   background: #fff;
-  border: 3px solid #2a7de1;
+  border: 3px solid #0000ff;
   cursor: pointer;
 }
 .dual-range-labels {
@@ -270,8 +270,31 @@ select:focus { border-color: #2a7de1; background: #fff; }
   text-align: center;
   margin-top: 10px;
   font-weight: 700;
-  color: #2a7de1;
+  color: #0000ff;
 }
+
+.value-callout {
+  background: #eaf0ff;
+  border: 1.5px solid #0000ff;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.value-callout-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #033dfc;
+  margin-bottom: 6px;
+}
+.value-callout-amount {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #0d1a4a;
+}
+.value-callout-amount.negative { color: #c62828; }
 
 .summary { margin-bottom: 8px; }
 .summary div.row {
@@ -306,8 +329,8 @@ button:active { transform: scale(0.97); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 button:not(:disabled):hover { opacity: 0.88; }
 
-.btn-secondary { background: #eaf2fd; color: #2a7de1; }
-.btn-primary   { background: #2a7de1; color: #fff; }
+.btn-secondary { background: #eaf2fd; color: #0000ff; }
+.btn-primary   { background: #033dfc; color: #fff; }
 
 .panel-left .btn-primary { padding: 14px 30px; font-size: 1rem; }
 
@@ -346,5 +369,14 @@ button:not(:disabled):hover { opacity: 0.88; }
   .step {
     align-items: flex-start;
     padding-top: 90px;
+  }
+  #scene-canvas {
+    transform: translateY(8vh);
+  }
+}
+
+@media (orientation: landscape) {
+  #scene-canvas {
+    transform: translateX(8vw);
   }
 }
