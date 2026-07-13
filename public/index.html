@@ -39,21 +39,33 @@
         <input type="text" id="companyName" placeholder="Company Name">
       </div>
 
-      <!-- <div class="question">
+      <div class="question">
         <label for="location">Location</label>
         <select id="location">
           <option value="">— Select —</option>
-          <option value="NSW">New South Wales</option>
+          <option value="ABB">Abbotsford</option>
+          <option value="BUR">Burnaby</option>
+          <option value="CAM">Campbell River</option>
+          <option value="CHI">Chilliwack</option>
+          <option value="COQ">Coquitlam</option>
+          <option value="DEL">Delta</option>
+          <option value="KAM">Kamloops</option>
+          <option value="KEL">Kelowna</option>
+          <option value="LAN">Langley</option>
+          <option value="MPR">Maple Ridge</option>
+          <option value="NEW">New Westminster</option>
+          <option value="NRV">North Vancouver</option>
+          <option value="PEN">Penticton</option>
+          <option value="PITT">Pitt Meadows</option>
+          <option value="PCQ">Port Coquitlam</option>
+          <option value="PMY">Port Moody</option>
+          <option value="RICH">Richmond</option>
+          <option value="SURR">Surrey</option>
+          <option value="VAN">Vancouver</option>
           <option value="VIC">Victoria</option>
-          <option value="QLD">Queensland</option>
-          <option value="WA">Western Australia</option>
-          <option value="SA">South Australia</option>
-          <option value="TAS">Tasmania</option>
-          <option value="ACT">Australian Capital Territory</option>
-          <option value="NT">Northern Territory</option>
-          <option value="OTHER">Other / International</option>
+          <option value="WHI">White Rock</option>
         </select>
-      </div> -->
+      </div>
 
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
@@ -85,8 +97,34 @@
     </div>
   </section>
 
-  <!-- STEP 3 : DEPOT -->
-  <section class="step" data-step="3">
+   <section class="step" data-step="3">
+    <div class="panel panel-card">
+      <div class="section-label">Operating Hours</div>
+      <div class="question">
+        <label>What time do daily operations begin and end?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="hoursFill"></div>
+          </div>
+          <input type="range" id="opsStart" min="0" max="24" step="0.5" value="7">
+          <input type="range" id="opsEnd"   min="0" max="24" step="0.5" value="18">
+          <div class="dual-range-labels">
+            <span>12am</span><span>12pm</span><span>12am</span>
+          </div>
+          <div class="dual-range-value" id="hoursValue">7:00am – 6:00pm</div>
+        </div>
+      </div>
+      <!-- <p class="hint-block">Vehicles pop in and out of the depot to match your operating window.</p> -->
+
+      <div class="step-nav">
+        <button class="btn-secondary" data-back>Back</button>
+        <button class="btn-primary" data-next>Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4 : DEPOT -->
+  <section class="step" data-step="4">
     <div class="panel panel-card">
       <div class="section-label">Depot</div>
 
@@ -132,33 +170,6 @@
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
         <button class="btn-primary" data-next disabled>Next</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- STEP 4 : TIME OF DAY -->
-  <section class="step" data-step="4">
-    <div class="panel panel-card">
-      <div class="section-label">Operating Hours</div>
-      <div class="question">
-        <label>What time do daily operations begin and end?</label>
-        <div class="dual-range">
-          <div class="dual-range-track">
-            <div class="dual-range-fill" id="hoursFill"></div>
-          </div>
-          <input type="range" id="opsStart" min="0" max="24" step="0.5" value="7">
-          <input type="range" id="opsEnd"   min="0" max="24" step="0.5" value="18">
-          <div class="dual-range-labels">
-            <span>12am</span><span>12pm</span><span>12am</span>
-          </div>
-          <div class="dual-range-value" id="hoursValue">7:00am – 6:00pm</div>
-        </div>
-      </div>
-      <!-- <p class="hint-block">Vehicles pop in and out of the depot to match your operating window.</p> -->
-
-      <div class="step-nav">
-        <button class="btn-secondary" data-back>Back</button>
-        <button class="btn-primary" data-next>Next</button>
       </div>
     </div>
   </section>

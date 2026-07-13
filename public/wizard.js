@@ -1,7 +1,7 @@
 (function () {
   const state = {
     companyName: '',
-    // location: '',
+    location: '',
     fleetSize: '',
     centralDepot: null,
     landOwnership: null,
@@ -62,13 +62,13 @@
         FuseScene.showFleetGrid(fleetCap(state.fleetSize));
         break;
       case 3:
-        FuseScene.depotReset();
-        applyDepotState();
+        // FuseScene.cityReset();
+        // FuseScene.enterCity();
+        syncHoursTrucks();
         break;
       case 4:
-        FuseScene.cityReset();
-        FuseScene.enterCity();
-        syncHoursTrucks();
+        FuseScene.depotReset();
+        applyDepotState();
         break;
       case 5:
         FuseScene.depotReset();
@@ -98,15 +98,21 @@
   }
 
   // ---------- step 1: company ----------
-  const companyNameEl = document.getElementById('companyName');
+  const companyNameEl = document.getElementById('companyName'); 
+  const locationEl = document.getElementById('location');
+
 
   function validateStep1() {
-    const ok = companyNameEl.value.trim().length > 0;
+    const ok = companyNameEl.value.trim().length > 0 && locationEl.value !== '';
     nextButtonFor(1).disabled = !ok;
     return ok;
   }
   companyNameEl.addEventListener('input', () => {
     state.companyName = companyNameEl.value.trim();
+    validateStep1();
+  });
+  locationEl.addEventListener('change', () => {
+    state.location = locationEl.value;
     validateStep1();
   });
  
@@ -141,7 +147,7 @@
 
   function applyDepotState() {
     const hasSelection = state.centralDepot !== null;
-    nextButtonFor(3).disabled = !hasSelection;
+    nextButtonFor(4).disabled = !hasSelection;
     depotSubQuestions.classList.toggle('open', hasSelection);
     FuseScene.enterDepot(state.centralDepot === true);
     const count = state.centralDepot === true ? Math.min(fleetCap(state.fleetSize) || 6, 8) : 0;
@@ -211,7 +217,7 @@
   function renderSummary() {
     const rows = [
       ['Company', state.companyName || '—'],
-      // ['Location', state.location || '—'],
+      ['Location', state.location || '—'],
       ['Fleet size', state.fleetSize || '—'],
       ['Central depot', YES_NO(state.centralDepot)],
       ['Land ownership', state.landOwnership || '—'],
