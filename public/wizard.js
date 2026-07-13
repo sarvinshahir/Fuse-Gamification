@@ -2,7 +2,8 @@
   const state = {
     companyName: '',
     location: '',
-    fleetSize: '',
+    mediumCount: 0,
+    heavyCount: 0,
     centralDepot: null,
     landOwnership: null,
     leaseRemainingYears: null,
@@ -10,6 +11,7 @@
     chargerRoom: null,
     opsStartHour: 7,
     opsEndHour: 18,
+    avgDistanceKm: 150,
     evPercent: 0,
   };
 
@@ -20,11 +22,6 @@
 
   const stepEls = Array.from(document.querySelectorAll('.step'));
   const progressEl = document.getElementById('progress');
-
-  function fleetCap(value) {
-    const map = { '1-10': 6, '10-20': 10, '20-50': 16, '50+': 24 };
-    return map[value] || 0;
-  }
 
   // ---------- progress dots ----------
   function buildProgress() {
@@ -60,7 +57,7 @@
         break;
       case 2:
         FuseScene.enterCity();
-        FuseScene.showFleetGrid(fleetCap(state.fleetSize));
+        FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
         break;
       case 3:
         FuseScene.enterCity();
@@ -68,16 +65,14 @@
         syncHoursTrucks();
         break;
       case 4:
+        // FuseScene.enterCity();
+        break;
+      case 5:
         FuseScene.enterDepot(true);
         applyDepotState();
         break;
-      case 5:
-        FuseScene.citySetEvFraction(state.evPercent / 100);
-        break;
       case 6:
-        // FuseScene.enterCity();
-        // FuseScene.showFleetGrid(fleetCap(state.fleetSize));
-        // FuseScene.citySetEvFraction(state.evPercent / 100);
+        FuseScene.citySetEvFraction(state.evPercent / 100);
         break;
       case 7:
         renderSummary();
@@ -123,13 +118,42 @@
   validateStep1();
 
   // ---------- step 2: fleet size ----------
-  document.querySelectorAll('input[name="fleetSize"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-      state.fleetSize = radio.value;
-      FuseScene.showFleetGrid(fleetCap(state.fleetSize));
-      nextButtonFor(2).disabled = false;
-    });
-  });
+  const mediumCountEl = document.getElementById('mediumCount');
+  const mediumFillEl = document.getElementById('mediumFill');
+  const mediumValueEl = document.getElementById('mediumValue');
+  const heavyCountEl = document.getElementById('heavyCount');
+  const heavyFillEl = document.getElementById('heavyFill');
+  const heavyValueEl = document.getElementById('heavyValue');
+
+  function updateFleetSizeUI() {
+    const medium = Number(mediumCountEl.value);
+    const heavy = Number(heavyCountEl.value);
+    state.mediumCount = medium;
+    state.heavyCount = heavy;
+
+    mediumFillEl.style.left = '0';
+    mediumFillEl.style.width = (medium / Number(mediumCountEl.max)) * 100 + '%';
+    mediumValueEl.textContent = `${medium} vehicle${medium === 1 ? '' : 's'}`;
+
+    heavyFillEl.style.left = '0';
+    heavyFillEl.style.width = (heavy / Number(heavyCountEl.max)) * 100 + '%';
+    heavyValueEl.textContent = `${heavy} vehicle${heavy === 1 ? '' : 's'}`;
+
+    nextButtonFor(2).disabled = (medium + heavy) === 0;
+  }
+
+  // rebuilding the fleet grid is the expensive part, so only do it once the
+  // user releases the slider (native 'change') rather than on every 'input'
+  function redrawFleetGrid() {
+    FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
+  }
+
+  mediumCountEl.addEventListener('input', updateFleetSizeUI);
+  heavyCountEl.addEventListener('input', updateFleetSizeUI);
+  mediumCountEl.addEventListener("mouseup", redrawFleetGrid);
+  heavyCountEl.addEventListener("mouseup", redrawFleetGrid);
+  updateFleetSizeUI();
+  redrawFleetGrid();
 
   // ---------- step 3: depot ----------
   const depotCheckboxes = document.querySelectorAll('input[name="centralDepot"]');
@@ -151,7 +175,7 @@
 
   function applyDepotState() {
     const hasSelection = state.centralDepot !== null;
-    nextButtonFor(4).disabled = !hasSelection;
+    nextButtonFor(5).disabled = !hasSelection;
     depotSubQuestions.classList.toggle('open', hasSelection);
     // FuseScene.enterDepot(true); //state.centralDepot === true
   }
@@ -204,14 +228,30 @@
   }
 
   function syncHoursTrucks() {
-    if (currentStep !== 4) return;
+    if (currentStep !== 3) return;
     const fraction = Math.max(0, (state.opsEndHour - state.opsStartHour)) / 24;
-    FuseScene.citySetVisibleCount(Math.round(fraction * 12));
+    //FuseScene.citySetVisibleCount(Math.round(fraction * 12));
   }
 
   opsStartEl.addEventListener('input', updateHoursUI);
   opsEndEl.addEventListener('input', updateHoursUI);
   updateHoursUI();
+
+  // ---------- step 4: average daily distance ----------
+  const avgDistanceEl = document.getElementById('avgDistance');
+  const distanceFillEl = document.getElementById('distanceFill');
+  const distanceValueEl = document.getElementById('distanceValue');
+
+  function updateDistanceUI() {
+    const km = Number(avgDistanceEl.value);
+    state.avgDistanceKm = km;
+    distanceFillEl.style.left = '0';
+    distanceFillEl.style.width = (km / Number(avgDistanceEl.max)) * 100 + '%';
+    distanceValueEl.textContent = `${km} km/day`;
+  }
+
+  avgDistanceEl.addEventListener('input', updateDistanceUI);
+  updateDistanceUI();
 
   // ---------- step 6: EV percentage ----------
   const evPercentEl = document.getElementById('evPercent');
@@ -228,7 +268,7 @@
   }
 
   function syncEvTrucks() {
-    if (currentStep !== 5) return;
+    if (currentStep !== 6) return;
     FuseScene.citySetEvFraction(state.evPercent / 100);
   }
 
@@ -242,13 +282,15 @@
     const rows = [
       ['Company', state.companyName || '—'],
       ['Location', state.location || '—'],
-      ['Fleet size', state.fleetSize || '—'],
+      ['Medium duty vehicles', state.mediumCount],
+      ['Heavy duty vehicles', state.heavyCount],
       ['Central depot', YES_NO(state.centralDepot)],
       ['Land ownership', state.landOwnership || '—'],
       ['Lease remaining (yrs)', state.leaseRemainingYears ?? '—'],
       ['Strata approval required', YES_NO(state.strataApproval)],
       ['Room for chargers', YES_NO(state.chargerRoom)],
       ['Operating hours', `${formatHour(state.opsStartHour)} – ${formatHour(state.opsEndHour)}`],
+      ['Average distance/day', `${state.avgDistanceKm} km`],
       ['EV percentage', `${state.evPercent}%`],
     ];
     const summaryEl = document.getElementById('summary');

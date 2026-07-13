@@ -43,27 +43,27 @@
         <label for="location">Location</label>
         <select id="location">
           <option value="">— Select —</option>
-          <option value="ABB">Abbotsford</option>
-          <option value="BUR">Burnaby</option>
-          <option value="CAM">Campbell River</option>
-          <option value="CHI">Chilliwack</option>
-          <option value="COQ">Coquitlam</option>
-          <option value="DEL">Delta</option>
-          <option value="KAM">Kamloops</option>
-          <option value="KEL">Kelowna</option>
-          <option value="LAN">Langley</option>
-          <option value="MPR">Maple Ridge</option>
-          <option value="NEW">New Westminster</option>
-          <option value="NRV">North Vancouver</option>
-          <option value="PEN">Penticton</option>
-          <option value="PITT">Pitt Meadows</option>
-          <option value="PCQ">Port Coquitlam</option>
-          <option value="PMY">Port Moody</option>
-          <option value="RICH">Richmond</option>
-          <option value="SURR">Surrey</option>
-          <option value="VAN">Vancouver</option>
-          <option value="VIC">Victoria</option>
-          <option value="WHI">White Rock</option>
+          <option value="Abbotsford">Abbotsford</option>
+          <option value="Burnaby">Burnaby</option>
+          <option value="Campbell Rive">Campbell River</option>
+          <option value="Chilliwack">Chilliwack</option>
+          <option value="Coquitlam">Coquitlam</option>
+          <option value="Delta">Delta</option>
+          <option value="Kamloops">Kamloops</option>
+          <option value="Kelowna">Kelowna</option>
+          <option value="Langley">Langley</option>
+          <option value="Maple Ridge">Maple Ridge</option>
+          <option value="New Westminster">New Westminster</option>
+          <option value="North Vancouver">North Vancouver</option>
+          <option value="Penticton">Penticton</option>
+          <option value="Pitt Meadows">Pitt Meadows</option>
+          <option value="Port Coquitlam">Port Coquitlam</option>
+          <option value="Port Moody">Port Moody</option>
+          <option value="Richmond">Richmond</option>
+          <option value="Surrey">Surrey</option>
+          <option value="Vancouver">Vancouver</option>
+          <option value="Victoria">Victoria</option>
+          <option value="White Rock">White Rock</option>
         </select>
       </div>
 
@@ -78,17 +78,34 @@
   <section class="step" data-step="2">
     <div class="panel panel-card">
       <div class="section-label">Your Fleet</div>
+
       <div class="question">
-        <label>How many vehicles are in your fleet?</label>
-        <div class="radio-group" id="fleetSizeGroup">
-          <label><input type="radio" name="fleetSize" value="1-10"> 1-10</label>
-          <label><input type="radio" name="fleetSize" value="10-20"> 10-20</label>
-          <label><input type="radio" name="fleetSize" value="20-50"> 20-50</label>
-          <label><input type="radio" name="fleetSize" value="50+"> 50+</label>
+        <label>How many medium duty vehicles are in your fleet?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="mediumFill"></div>
+          </div>
+          <input type="range" id="mediumCount" min="0" max="30" step="1" value="0">
+          <div class="dual-range-labels">
+            <span>0</span><span>30</span>
+          </div>
+          <div class="dual-range-value" id="mediumValue">0 vehicles</div>
         </div>
       </div>
-      <!-- <p class="hint-block" id="fleetHint">Click anywhere on the ground to bring a vehicle into your fleet.</p>
-      <div class="counter" id="fleetCounter">0 / 0 vehicles placed</div> -->
+
+      <div class="question">
+        <label>How many heavy duty vehicles are in your fleet?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="heavyFill"></div>
+          </div>
+          <input type="range" id="heavyCount" min="0" max="30" step="1" value="0">
+          <div class="dual-range-labels">
+            <span>0</span><span>30</span>
+          </div>
+          <div class="dual-range-value" id="heavyValue">0 vehicles</div>
+        </div>
+      </div>
 
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
@@ -123,8 +140,33 @@
     </div>
   </section>
 
-  <!-- STEP 4 : DEPOT -->
+  <!-- STEP 4 : AVERAGE DAILY DISTANCE -->
   <section class="step" data-step="4">
+    <div class="panel panel-card">
+      <div class="section-label">Daily Usage</div>
+      <div class="question">
+        <label>What is the average distance travelled per vehicle per day?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="distanceFill"></div>
+          </div>
+          <input type="range" id="avgDistance" min="0" max="400" step="10" value="150">
+          <div class="dual-range-labels">
+            <span>0 km</span><span>400 km</span>
+          </div>
+          <div class="dual-range-value" id="distanceValue">150 km/day</div>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn-secondary" data-back>Back</button>
+        <button class="btn-primary" data-next>Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 5 : DEPOT -->
+  <section class="step" data-step="5">
     <div class="panel panel-card">
       <div class="section-label">Depot</div>
 
@@ -174,8 +216,8 @@
     </div>
   </section>
 
-  <!-- STEP 5: EV PERCENTAGE -->
-  <section class="step" data-step="5">
+  <!-- STEP 6: EV PERCENTAGE -->
+  <section class="step" data-step="6">
     <div class="panel panel-card">
       <div class="section-label">Electrification</div>
       <div class="question">
@@ -220,7 +262,7 @@
   </section> -->
 
   <!-- STEP 7 : REVIEW & SUBMIT -->
-  <section class="step" data-step="6">
+  <section class="step" data-step="7">
     <div class="panel panel-card">
       <div class="section-label">Review &amp; Submit</div>
       <dl class="summary" id="summary"></dl>

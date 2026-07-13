@@ -169,17 +169,19 @@ window.FuseScene = (function () {
     });
 
     g.userData.isEV = isEV;
+    g.userData.busType = 'full';
     g.scale.setScalar(scale);
     return g;
   }
 
   // Cutaway/mid-size bus: van-style cab (dark hood + sloped windshield) with a
   // shorter, taller passenger box behind it and a single rear axle (matches the
-  // ~26 capacity "Mid Bus" photo).
-  function makeCutawayBus(scale = 1) {
+  // ~26 capacity "Mid Bus" photo). isEV swaps the diesel livery/tailpipe for an
+  // electric-blue body + charge port, same as the full-size bus.
+  function makeCutawayBus(scale = 1, isEV = false) {
     const g = new THREE.Group();
     const m = mats();
-    const bus = toonMat(0xffcc00);
+    const bus = toonMat(isEV ? 0x2a7de1 : 0xffcc00);
 
     const hoodLength = 1.3;
     const bodyLength = 3.2;
@@ -212,11 +214,17 @@ window.FuseScene = (function () {
     bumperRear.position.set(0, 0.28, -front - 0.05);
     g.add(bumperRear);
 
-    const tailpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 8), m.dark);
-    tailpipe.rotation.x = Math.PI / 2;
-    tailpipe.position.set(-0.8, 0.28, -front - 0.15);
-    g.add(tailpipe);
-    g.userData.exhaustPoint = new THREE.Vector3(-0.8, 0.28, -front - 0.28);
+    if (isEV) {
+      const port = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.05), toonMat(0x33dd66));
+      port.position.set(0.86, 0.85, front - hoodLength - bodyLength / 2);
+      g.add(port);
+    } else {
+      const tailpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 8), m.dark);
+      tailpipe.rotation.x = Math.PI / 2;
+      tailpipe.position.set(-0.8, 0.28, -front - 0.15);
+      g.add(tailpipe);
+      g.userData.exhaustPoint = new THREE.Vector3(-0.8, 0.28, -front - 0.28);
+    }
 
     // tow mirrors on stalks off the cab
     [-1, 1].forEach(sign => {
@@ -240,6 +248,8 @@ window.FuseScene = (function () {
       });
     });
 
+    g.userData.isEV = isEV;
+    g.userData.busType = 'cutaway';
     g.scale.setScalar(scale);
     return g;
   }
@@ -522,8 +532,11 @@ window.FuseScene = (function () {
   const splashTarget = new THREE.Vector3(0, 0, 0);
 
   // ---------- public: city (fleet-size + hours) ----------
-  function showFleetGrid(count) {
+  // Builds the fleet grid from a mix of heavy duty (full-size bus) and medium
+  // duty (cutaway bus) vehicles, heavy first then medium, in one combined grid.
+  function showFleetGrid(heavyCount, mediumCount) {
     [...trucks.children].forEach(t => trucks.remove(t));
+    const count = heavyCount + mediumCount;
     const spacingX = 3.5, spacingZ = 8;
     const cols = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));
     const rows = Math.ceil(count / cols);
@@ -532,7 +545,7 @@ window.FuseScene = (function () {
     let placed = 0;
     for (let r = 0; r < rows && placed < count; r++) {
       for (let c = 0; c < cols && placed < count; c++) {
-        const truck = makeFullSizeBus(truckScale);
+        const truck = placed < heavyCount ? makeFullSizeBus(truckScale) : makeCutawayBus(truckScale);
         truck.position.set(startX + c * spacingX * truckScale, 0, startZ + r * spacingZ * truckScale);
         truck.scale.setScalar(0.001);
         trucks.add(truck);
@@ -552,8 +565,12 @@ window.FuseScene = (function () {
       trucks.add(truck);
       popIn(truck);
     }
-    while (trucks.children.length > n) {
-      const truck = trucks.children[trucks.children.length - 1];
+    // popOutAndRemove() only detaches its truck once the shrink tween finishes,
+    // so trucks.children.length won't drop yet — compute how many to remove
+    // up front instead of re-checking the (still-unchanged) live count.
+    const toRemove = trucks.children.length - n;
+    for (let i = 0; i < toRemove; i++) {
+      const truck = trucks.children[trucks.children.length - 1 - i];
       popOutAndRemove(truck, trucks);
     }
   }
@@ -565,7 +582,7 @@ window.FuseScene = (function () {
   // Swaps the first `fraction` share of the current city fleet to the EV bus
   // model (blue livery, charge port, no tailpipe/exhaust) and the rest back
   // to diesel, replacing each truck's mesh in place.
-  function citySetEvFraction(fraction) {
+  function SetEvFraction(fraction) {
     fraction = Math.max(0, Math.min(1, fraction));
     const current = trucks.children.slice();
     const targetEv = Math.round(current.length * fraction);
@@ -573,7 +590,8 @@ window.FuseScene = (function () {
       const shouldBeEv = i < targetEv;
       if (!!truck.userData.isEV === shouldBeEv) return;
       const scale = truck.scale.x;
-      const replacement = makeFullSizeBus(scale, shouldBeEv);
+      const makeBus = truck.userData.busType === 'cutaway' ? makeCutawayBus : makeFullSizeBus;
+      const replacement = makeBus(scale, shouldBeEv);
       replacement.position.copy(truck.position);
       replacement.rotation.copy(truck.rotation);
       // splice in at the same index instead of trucks.add() (which appends),
@@ -777,7 +795,7 @@ window.FuseScene = (function () {
     enterDepot,
     showFleetGrid,
     citySetVisibleCount,
-    citySetEvFraction,
+    SetEvFraction,
     cityReset,
     get truckCount() { return trucks.children.length; },
   };
