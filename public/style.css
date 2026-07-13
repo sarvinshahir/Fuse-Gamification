@@ -22,7 +22,7 @@ html, body {
   left: 24px;
   height: 34px;
   z-index: 20;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35));
+  /* filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35)); */
 }
 
 .progress {
@@ -339,4 +339,11 @@ button:not(:disabled):hover { opacity: 0.88; }
   .step { padding: 0 5vw; }
   .panel-card { padding: 26px 22px; }
   .panel-left h1 { font-size: 2rem; }
+}
+
+@media (orientation: portrait) {
+  .step {
+    align-items: flex-start;
+    padding-top: 90px;
+  }
 }

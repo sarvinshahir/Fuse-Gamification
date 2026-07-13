@@ -1,9 +1,8 @@
 (function () {
   const state = {
     companyName: '',
-    location: '',
+    // location: '',
     fleetSize: '',
-    fleetVehiclesPlaced: 0,
     centralDepot: null,
     landOwnership: null,
     leaseRemainingYears: null,
@@ -22,7 +21,7 @@
   const progressEl = document.getElementById('progress');
 
   function fleetCap(value) {
-    const map = { '1-10': 10, '10-20': 12, '20-50': 12, '50+': 12 };
+    const map = { '1-10': 6, '10-20': 10, '20-50': 16, '50+': 24 };
     return map[value] || 0;
   }
 
@@ -51,7 +50,6 @@
   }
 
   function onEnterStep(n) {
-    FuseScene.setClickHandler(null);
     switch (n) {
       case 0:
         FuseScene.enterSplash();
@@ -60,16 +58,8 @@
         FuseScene.enterSplash();
         break;
       case 2:
-        FuseScene.cityReset();
-        state.fleetVehiclesPlaced = 0;
-        updateFleetCounter();
-        FuseScene.enterCity(fleetCap(state.fleetSize));
-        FuseScene.setClickHandler(pt => {
-          if (FuseScene.cityAddTruckAt(pt)) {
-            state.fleetVehiclesPlaced++;
-            updateFleetCounter();
-          }
-        });
+        FuseScene.enterCity();
+        FuseScene.showFleetGrid(fleetCap(state.fleetSize));
         break;
       case 3:
         FuseScene.depotReset();
@@ -77,7 +67,7 @@
         break;
       case 4:
         FuseScene.cityReset();
-        FuseScene.enterCity(24);
+        FuseScene.enterCity();
         syncHoursTrucks();
         break;
       case 5:
@@ -89,11 +79,6 @@
         renderSummary();
         break;
     }
-  }
-
-  function updateFleetCounter() {
-    document.getElementById('fleetCounter').textContent =
-      `${state.fleetVehiclesPlaced} / ${fleetCap(state.fleetSize)} vehicles placed`;
   }
 
   // ---------- nav buttons ----------
@@ -114,10 +99,9 @@
 
   // ---------- step 1: company ----------
   const companyNameEl = document.getElementById('companyName');
-  const locationEl = document.getElementById('location');
 
   function validateStep1() {
-    const ok = companyNameEl.value.trim().length > 0 && locationEl.value !== '';
+    const ok = companyNameEl.value.trim().length > 0;
     nextButtonFor(1).disabled = !ok;
     return ok;
   }
@@ -125,20 +109,14 @@
     state.companyName = companyNameEl.value.trim();
     validateStep1();
   });
-  locationEl.addEventListener('change', () => {
-    state.location = locationEl.value;
-    validateStep1();
-  });
+ 
   validateStep1();
 
   // ---------- step 2: fleet size ----------
   document.querySelectorAll('input[name="fleetSize"]').forEach(radio => {
     radio.addEventListener('change', () => {
       state.fleetSize = radio.value;
-      state.fleetVehiclesPlaced = 0;
-      FuseScene.cityReset();
-      FuseScene.enterCity(fleetCap(state.fleetSize));
-      updateFleetCounter();
+      FuseScene.showFleetGrid(fleetCap(state.fleetSize));
       nextButtonFor(2).disabled = false;
     });
   });
@@ -233,7 +211,7 @@
   function renderSummary() {
     const rows = [
       ['Company', state.companyName || '—'],
-      ['Location', state.location || '—'],
+      // ['Location', state.location || '—'],
       ['Fleet size', state.fleetSize || '—'],
       ['Central depot', YES_NO(state.centralDepot)],
       ['Land ownership', state.landOwnership || '—'],
