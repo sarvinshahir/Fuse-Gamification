@@ -10,9 +10,10 @@
     chargerRoom: null,
     opsStartHour: 7,
     opsEndHour: 18,
+    evPercent: 0,
   };
 
-  const TOTAL_STEPS = 7; // steps 0..6
+  const TOTAL_STEPS = 8; // steps 0..7
   let currentStep = 0;
 
   FuseScene.init(document.getElementById('scene-canvas'));
@@ -62,8 +63,8 @@
         FuseScene.showFleetGrid(fleetCap(state.fleetSize));
         break;
       case 3:
-        // FuseScene.cityReset();
-        // FuseScene.enterCity();
+        
+        FuseScene.cityPopIn();
         syncHoursTrucks();
         break;
       case 4:
@@ -76,6 +77,11 @@
         FuseScene.enterRecharge();
         break;
       case 6:
+        FuseScene.enterCity();
+        FuseScene.showFleetGrid(fleetCap(state.fleetSize));
+        FuseScene.citySetEvFraction(state.evPercent / 100);
+        break;
+      case 7:
         renderSummary();
         break;
     }
@@ -211,7 +217,29 @@
   opsEndEl.addEventListener('input', updateHoursUI);
   updateHoursUI();
 
-  // ---------- step 6: review + submit ----------
+  // ---------- step 6: EV percentage ----------
+  const evPercentEl = document.getElementById('evPercent');
+  const evFillEl = document.getElementById('evFill');
+  const evValueEl = document.getElementById('evValue');
+
+  function updateEvUI() {
+    const pct = Number(evPercentEl.value);
+    state.evPercent = pct;
+    evFillEl.style.left = '0';
+    evFillEl.style.width = pct + '%';
+    evValueEl.textContent = `${pct}% electric`;
+    syncEvTrucks();
+  }
+
+  function syncEvTrucks() {
+    if (currentStep !== 6) return;
+    FuseScene.citySetEvFraction(state.evPercent / 100);
+  }
+
+  evPercentEl.addEventListener('input', updateEvUI);
+  updateEvUI();
+
+  // ---------- step 7: review + submit ----------
   const YES_NO = v => (v === null ? '—' : v ? 'Yes' : 'No');
 
   function renderSummary() {
@@ -225,6 +253,7 @@
       ['Strata approval required', YES_NO(state.strataApproval)],
       ['Room for chargers', YES_NO(state.chargerRoom)],
       ['Operating hours', `${formatHour(state.opsStartHour)} – ${formatHour(state.opsEndHour)}`],
+      ['EV percentage', `${state.evPercent}%`],
     ];
     const summaryEl = document.getElementById('summary');
     summaryEl.innerHTML = rows.map(([k, v]) =>

@@ -11,12 +11,14 @@ window.FuseScene = (function () {
   let groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let mouseNDC = new THREE.Vector2(1e6, 1e6);
   let hitPt = new THREE.Vector3();
+  let truckScale = 0.75;
 
   const movers = [];       // { obj, target: Vector3, speed, onArrive }
   const scaleTweens = [];  // { obj, elapsed, duration, from, to }
   const depotTrucks = [];
   const cityTrucks = [];
   let splashCar = null;
+  const exhaustPuffs = []; // { mesh, age, maxAge, vel }
 
   // ---------- material / mesh factories ----------
   function makeToonGradient(steps) {
@@ -43,46 +45,201 @@ window.FuseScene = (function () {
     };
   }
 
-  function makeTruck(scale = 1, model = 0) {
+  // ---------- exhaust puffs ----------
+  const EXHAUST_GEO = new THREE.SphereGeometry(0.14, 6, 6);
+  function spawnExhaustPuff(worldPos, scaleMul = 3) {
+    const mesh = new THREE.Mesh(
+      EXHAUST_GEO,
+      new THREE.MeshBasicMaterial({ color: 0x9a9a9a, transparent: true, opacity: 0.45, depthWrite: false })
+    );
+    mesh.position.copy(worldPos);
+    mesh.scale.setScalar(15 * scaleMul);
+    scene.add(mesh);
+    scaleMul *= 3;
+    exhaustPuffs.push({
+      mesh,
+      age: 0,
+      maxAge: 300 + Math.random() * 400,
+      scaleMul,
+      vel: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.0025,
+        0.001 + Math.random() * 0.0025,
+        (Math.random() - 0.5) * 0.0025
+      ),
+    });
+  }
+
+  function updateExhaustPuffs(dtMs) {
+    for (let i = exhaustPuffs.length - 1; i >= 0; i--) {
+      const p = exhaustPuffs[i];
+      p.age += dtMs;
+      const t = Math.min(p.age / p.maxAge, 1);
+      p.mesh.position.addScaledVector(p.vel, dtMs);
+      p.mesh.scale.setScalar((0.4 + t * 0.9) * p.scaleMul);
+      p.mesh.material.opacity = 0.5 * (1 - t);
+      if (t >= 1) {
+        scene.remove(p.mesh);
+        p.mesh.material.dispose();
+        exhaustPuffs.splice(i, 1);
+      }
+    }
+  }
+
+  // spawns a puff at a truck's tailpipe on a randomized interval; skips
+  // trucks that are actively charging (a diesel puff would contradict the
+  // battery-fill visual) or not yet part of a visible group.
+  function updateTruckExhaust(truck, dtMs) {
+    if (!truck.userData.exhaustPoint || truck.userData.bar) return;
+    truck.userData.exhaustTimer = (truck.userData.exhaustTimer || 0) - dtMs;
+    if (truck.userData.exhaustTimer <= 0) {
+      const worldPos = truck.localToWorld(truck.userData.exhaustPoint.clone());
+      spawnExhaustPuff(worldPos, truck.getWorldScale(new THREE.Vector3()).x);
+      truck.userData.exhaustTimer = 10 + Math.random() * 100;
+    }
+  }
+
+  // Full-size conventional school bus: flat front nose, black roof cap over
+  // the windshield, tandem dual-wheel rear axles (matches the ~72-77 capacity photo).
+  // isEV swaps the diesel livery/tailpipe for an electric-blue body + charge port.
+  function makeFullSizeBus(scale = 1, isEV = false) {
     const g = new THREE.Group();
     const m = mats();
-    const bus = toonMat(0xffcc00);
-
-    const length = model === 0 ? 6.6 : 4.6;
-    const axleCount = model === 0 ? 3 : 2;
+    const bus = toonMat(isEV ? 0x2a7de1 : 0xffcc00);
+    const length = 6.6;
 
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.5, length), bus);
     body.position.y = 1.05;
     body.castShadow = true;
     g.add(body);
 
+    const roofCap = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.22, 0.5), m.dark);
+    roofCap.position.set(0, 1.87, length / 2 - 0.16);
+    g.add(roofCap);
+
     const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 0.06), m.glass);
     windshield.position.set(0, 1.2, length / 2 + 0.02);
     g.add(windshield);
 
     const sideWindows = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.45, length - 1.6), m.glass);
-    sideWindows.position.set(0, 1.3, 0);
+    sideWindows.position.set(0, 1.3, -0.3);
     g.add(sideWindows);
 
+    const grille = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.15), m.dark);
+    grille.position.set(0, 0.55, length / 2 + 0.1);
+    g.add(grille);
+
     const bumperFront = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.28, 0.2), m.dark);
-    bumperFront.position.set(0, 0.3, length / 2 + 0.08);
+    bumperFront.position.set(0, 0.3, length / 2 + 0.18);
     g.add(bumperFront);
     const bumperRear = bumperFront.clone();
     bumperRear.position.z = -length / 2 - 0.08;
     g.add(bumperRear);
 
+    if (isEV) {
+      const port = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.05), toonMat(0x33dd66));
+      port.position.set(0.96, 0.9, -length / 2 + 1.1);
+      g.add(port);
+    } else {
+      const tailpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 8), m.dark);
+      tailpipe.rotation.x = Math.PI / 2;
+      tailpipe.position.set(-0.85, 0.32, -length / 2 - 0.18);
+      g.add(tailpipe);
+      g.userData.exhaustPoint = new THREE.Vector3(-0.85, 0.32, -length / 2 - 0.32);
+    }
+
+    // front axle: single wheels
     const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.32, 14);
-    const span = length - 1.6;
-    for (let i = 0; i < axleCount; i++) {
-      const z = axleCount === 1 ? 0 : span / 2 - (span * i) / (axleCount - 1);
-      [-0.95, 0.95].forEach(x => {
-        const w = new THREE.Mesh(wheelGeo, m.wheel);
+    [-0.95, 0.95].forEach(x => {
+      const w = new THREE.Mesh(wheelGeo, m.wheel);
+      w.rotation.z = Math.PI / 2;
+      w.position.set(x, 0.4, length / 2 - 0.9);
+      w.castShadow = true;
+      g.add(w);
+    });
+
+    // rear tandem axles: wider cylinders to read as dual wheels
+    const dualWheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.52, 14);
+    [-1, 1].forEach(sign => {
+      [-length / 2 + 0.9, -length / 2 + 2.0].forEach(z => {
+        const w = new THREE.Mesh(dualWheelGeo, m.wheel);
         w.rotation.z = Math.PI / 2;
-        w.position.set(x, 0.4, z);
+        w.position.set(sign * 0.95, 0.4, z);
         w.castShadow = true;
         g.add(w);
       });
-    }
+    });
+
+    g.userData.isEV = isEV;
+    g.scale.setScalar(scale);
+    return g;
+  }
+
+  // Cutaway/mid-size bus: van-style cab (dark hood + sloped windshield) with a
+  // shorter, taller passenger box behind it and a single rear axle (matches the
+  // ~26 capacity "Mid Bus" photo).
+  function makeCutawayBus(scale = 1) {
+    const g = new THREE.Group();
+    const m = mats();
+    const bus = toonMat(0xffcc00);
+
+    const hoodLength = 1.3;
+    const bodyLength = 3.2;
+    const totalLength = hoodLength + bodyLength;
+    const front = totalLength / 2;
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.5, bodyLength), bus);
+    body.position.set(0, 1.05, front - hoodLength - bodyLength / 2);
+    body.castShadow = true;
+    g.add(body);
+
+    const sideWindows = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.45, bodyLength - 0.8), m.glass);
+    sideWindows.position.set(0, 1.3, front - hoodLength - bodyLength / 2);
+    g.add(sideWindows);
+
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.95, hoodLength), m.dark);
+    hood.position.set(0, 0.75, front - hoodLength / 2);
+    hood.castShadow = true;
+    g.add(hood);
+
+    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 0.06), m.glass);
+    windshield.position.set(0, 1.15, front - hoodLength + 0.05);
+    windshield.rotation.x = -0.3;
+    g.add(windshield);
+
+    const bumperFront = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.24, 0.15), m.dark);
+    bumperFront.position.set(0, 0.28, front + 0.05);
+    g.add(bumperFront);
+    const bumperRear = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.24, 0.15), m.dark);
+    bumperRear.position.set(0, 0.28, -front - 0.05);
+    g.add(bumperRear);
+
+    const tailpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 8), m.dark);
+    tailpipe.rotation.x = Math.PI / 2;
+    tailpipe.position.set(-0.8, 0.28, -front - 0.15);
+    g.add(tailpipe);
+    g.userData.exhaustPoint = new THREE.Vector3(-0.8, 0.28, -front - 0.28);
+
+    // tow mirrors on stalks off the cab
+    [-1, 1].forEach(sign => {
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 6), m.dark);
+      stalk.rotation.z = Math.PI / 2;
+      stalk.position.set(sign * 1.05, 1.15, front - 0.15);
+      g.add(stalk);
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.2), m.dark);
+      mirror.position.set(sign * 1.24, 1.15, front - 0.15);
+      g.add(mirror);
+    });
+
+    const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 14);
+    [front - hoodLength * 0.7, -front + 0.85].forEach(z => {
+      [-0.9, 0.9].forEach(x => {
+        const w = new THREE.Mesh(wheelGeo, m.wheel);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(x, 0.36, z);
+        w.castShadow = true;
+        g.add(w);
+      });
+    });
 
     g.scale.setScalar(scale);
     return g;
@@ -176,12 +333,13 @@ window.FuseScene = (function () {
   // ---------- groups ----------
   function buildSplashGroup() {
     const g = new THREE.Group();
-    splashCar = makeTruck(0.9);
+    splashCar = makeFullSizeBus(0.9);
     g.add(splashCar);
     return g;
   }
 
   const CITY_SPOTS = [];
+  const cityStaticObjects = []; // roads, buildings, trees — popped in via cityPopIn()
   function buildCityGroup() {
     const g = new THREE.Group();
 
@@ -191,11 +349,13 @@ window.FuseScene = (function () {
     roadNS.position.y = 0.02;
     roadNS.receiveShadow = true;
     g.add(roadNS);
+    cityStaticObjects.push(roadNS);
     const roadEW = new THREE.Mesh(new THREE.PlaneGeometry(90, 8), roadMat);
     roadEW.rotation.x = -Math.PI / 2;
     roadEW.position.y = 0.02;
     roadEW.receiveShadow = true;
     g.add(roadEW);
+    cityStaticObjects.push(roadEW);
 
     const colors = [0xff6b6b, 0xffd166, 0x5fd4ff, 0x9b6bff, 0x4ee6a0];
     const blockPositions = [
@@ -207,9 +367,11 @@ window.FuseScene = (function () {
       const b = makeBuildingBlock(6, h, 6, colors[i % colors.length]);
       b.position.set(x, 0, z);
       g.add(b);
+      cityStaticObjects.push(b);
       const t = makeTree();
       t.position.set(x + 3.6, 0, z + 3.6);
       g.add(t);
+      cityStaticObjects.push(t);
     });
 
     // waypoints along the roads where city trucks can appear
@@ -225,8 +387,30 @@ window.FuseScene = (function () {
     return g;
   }
 
+  
+  function cityPopIn(){
+    groupPopIn(cityStaticObjects);
+  }
+
+  function depotPopIn(){
+    groupPopIn(depotStaticObjects);
+  }
+
+  // pops every road/building/tree in the city group in with a staggered scale tween
+  function groupPopIn(objects, stagger = 20) {
+    objects.forEach((obj, i) => {
+      setTimeout(() => popInTo(obj, 1, 320), i * stagger);
+    });
+  }
+
+   function cityHide(stagger = 20) {
+    cityStaticObjects.forEach(obj => obj.scale.setScalar(0.001));
+  }
+
   const DEPOT_SPOTS = [];
   const DEPOT_CHARGERS = [];
+  const depotStaticObjects = []; // roads, buildings, trees — popped in via cityPopIn()
+
   function buildDepotGroup() {
     const g = new THREE.Group();
 
@@ -238,22 +422,29 @@ window.FuseScene = (function () {
     lot.position.set(-4, 0.015, 6);
     lot.receiveShadow = true;
     g.add(lot);
+    depotStaticObjects.push(lot);
 
     // shop building, back-right
     const shop = makeBuildingBlock(9, 4.2, 6, 0xffd699);
     shop.position.set(11, 0, -6);
     g.add(shop);
+    depotStaticObjects.push(shop);
+    
     const shopGlass = new THREE.Mesh(
       new THREE.BoxGeometry(3, 2.2, 0.15),
       toonMat(0x37dbe0, { transparent: true, opacity: 0.75 })
     );
     shopGlass.position.set(9, 1.5, -2.93);
     g.add(shopGlass);
+    
+    depotStaticObjects.push(shopGlass);
 
     [[-18, -2], [-18, 14], [18, -13]].forEach(([x, z]) => {
       const t = makeTree();
       t.position.set(x, 0, z);
       g.add(t);
+      
+      depotStaticObjects.push(t);
     });
 
     // parking rows (two rows of 4 bays) with painted lines + chargers at the row head
@@ -264,6 +455,8 @@ window.FuseScene = (function () {
         const line = makeLine(0.08, 5);
         line.position.set(x + 2.1, 0.02, rowZ);
         g.add(line);
+        
+        depotStaticObjects.push(line);
         DEPOT_SPOTS.push(new THREE.Vector3(x, 0, rowZ));
       }
       const lastLine = makeLine(0.08, 5);
@@ -273,6 +466,7 @@ window.FuseScene = (function () {
           const ch = makeCharger();
           ch.position.set(-18, 0, rowZ + (i === 0 ? -2 : 2));
           g.add(ch);
+          depotStaticObjects.push(ch);
           DEPOT_CHARGERS.push(ch);
         }
       }
@@ -309,9 +503,21 @@ window.FuseScene = (function () {
     movers.push({ obj, target: target.clone(), speed, onArrive });
   }
 
-  function popIn(obj, duration = 350) {
+  function popInTo(obj, targetScale, duration = 350) {
+    for (let i = scaleTweens.length - 1; i >= 0; i--) {
+      if (scaleTweens[i].obj === obj) scaleTweens.splice(i, 1);
+    }
     obj.scale.setScalar(0.001);
-    scaleTweens.push({ obj, elapsed: 0, duration, from: 0.001, to: 1 });
+    scaleTweens.push({ obj, elapsed: 0, duration, from: 0.001, to: targetScale });
+  }
+
+  function popIn(obj, duration = 350) {
+    popInTo(obj, 1, duration);
+  }
+
+  function appearTo(obj, targetScale, duration = 350) {
+    obj.scale.setScalar(0.001);
+    setTimeout(() => obj.scale.setScalar(targerScale), duration);
   }
 
   function appear(obj, duration = 350) {
@@ -371,13 +577,12 @@ window.FuseScene = (function () {
     const spacingX = 3.5, spacingZ = 8;
     const cols = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));
     const rows = Math.ceil(count / cols);
-    const truckScale = 0.75;
     const startX = -((cols - 1) * spacingX) / 2;
     const startZ = -((rows - 1) * spacingZ) / 2;
     let placed = 0;
     for (let r = 0; r < rows && placed < count; r++) {
       for (let c = 0; c < cols && placed < count; c++) {
-        const truck = makeTruck(truckScale);
+        const truck = makeFullSizeBus(truckScale);
         truck.position.set(startX + c * spacingX * truckScale, 0, startZ + r * spacingZ * truckScale);
         truck.scale.setScalar(0.001);
         groups.city.add(truck);
@@ -392,7 +597,7 @@ window.FuseScene = (function () {
     n = Math.max(0, Math.min(n, CITY_SPOTS.length));
     while (cityTrucks.length < n) {
       const spot = CITY_SPOTS[cityTrucks.length % CITY_SPOTS.length];
-      const truck = makeTruck(0.7);
+      const truck = makeFullSizeBus(0.7);
       truck.position.copy(spot);
       truck.rotation.y = spot.x !== 2.4 && spot.x !== -2.4 ? 0 : Math.PI / 2;
       groups.city.add(truck);
@@ -409,6 +614,27 @@ window.FuseScene = (function () {
     cityTrucks.splice(0).forEach(t => groups.city.remove(t));
   }
 
+  // Swaps the first `fraction` share of the current city fleet to the EV bus
+  // model (blue livery, charge port, no tailpipe/exhaust) and the rest back
+  // to diesel, replacing each truck's mesh in place.
+  function citySetEvFraction(fraction) {
+    fraction = Math.max(0, Math.min(1, fraction));
+    const targetEv = Math.round(cityTrucks.length * fraction);
+    cityTrucks.forEach((truck, i) => {
+      const shouldBeEv = i < targetEv;
+      if (!!truck.userData.isEV === shouldBeEv) return;
+      //this mucks up with the scaling in the transition
+      const scale = truck.scale.x;
+      const replacement = makeFullSizeBus(scale, shouldBeEv);
+      replacement.position.copy(truck.position);
+      replacement.rotation.copy(truck.rotation);
+      groups.city.add(replacement);
+      groups.city.remove(truck);
+      popInTo(replacement, truckScale, 250);
+      cityTrucks[i] = replacement;
+    });
+  }
+
   // ---------- public: depot ----------
   function depotParkTrucks(count) {
     count = Math.max(0, Math.min(count, DEPOT_SPOTS.length));
@@ -421,7 +647,7 @@ window.FuseScene = (function () {
     while (depotTrucks.length < count) {
       const idx = depotTrucks.length;
       const spot = DEPOT_SPOTS[idx];
-      const truck = makeTruck(0.85);
+      const truck = makeFullSizeBus(0.85);
       truck.position.set(spot.x, 0, -30);
       truck.rotation.y = 0;
       groups.depot.add(truck);
@@ -462,6 +688,7 @@ window.FuseScene = (function () {
 
   function depotReset() {
     depotTrucks.splice(0).forEach(t => groups.depot.remove(t));
+    groupPopIn(depotStaticObjects);
   }
 
   // ---------- step control ----------
@@ -478,6 +705,7 @@ window.FuseScene = (function () {
   function enterCity() {
     showOnly('city');
     setDayPhase(0);
+    cityHide();
   }
 
   function enterDepot(hasDepot) {
@@ -547,7 +775,11 @@ window.FuseScene = (function () {
         while (da < -Math.PI) da += Math.PI * 2;
         splashCar.rotation.y += da * 0.1;
       }
+      updateTruckExhaust(splashCar, dtMs);
     }
+    if (groups.city.visible) cityTrucks.forEach(t => updateTruckExhaust(t, dtMs));
+    if (groups.depot.visible) depotTrucks.forEach(t => updateTruckExhaust(t, dtMs));
+    updateExhaustPuffs(dtMs);
 
     renderer.render(scene, camera);
   }
@@ -614,10 +846,13 @@ window.FuseScene = (function () {
     init,
     enterSplash,
     enterCity,
+    cityPopIn,
+    depotPopIn,
     enterDepot,
     enterRecharge,
     showFleetGrid,
     citySetVisibleCount,
+    citySetEvFraction,
     cityReset,
     depotParkTrucks,
     depotReset,

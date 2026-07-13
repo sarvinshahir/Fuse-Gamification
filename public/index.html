@@ -184,13 +184,38 @@
 
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
+        <button class="btn-primary" data-next>Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 6 : EV PERCENTAGE -->
+  <section class="step" data-step="6">
+    <div class="panel panel-card">
+      <div class="section-label">Electrification</div>
+      <div class="question">
+        <label>What percentage of your fleet will be electric vehicles?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="evFill"></div>
+          </div>
+          <input type="range" id="evPercent" min="0" max="100" step="5" value="0">
+          <div class="dual-range-labels">
+            <span>0%</span><span>100%</span>
+          </div>
+          <div class="dual-range-value" id="evValue">0% electric</div>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn-secondary" data-back>Back</button>
         <button class="btn-primary" data-next>Review &amp; Submit</button>
       </div>
     </div>
   </section>
 
-  <!-- STEP 6 : REVIEW & SUBMIT -->
-  <section class="step" data-step="6">
+  <!-- STEP 7 : REVIEW & SUBMIT -->
+  <section class="step" data-step="7">
     <div class="panel panel-card">
       <div class="section-label">Review &amp; Submit</div>
       <dl class="summary" id="summary"></dl>
