@@ -41,6 +41,25 @@ const insertStmt = db.prepare(`
   )
 `);
 
+// Lead-capture contacts. Keyed loosely on email for now — once account
+// login/auth exists, this is the record that becomes a user's account so
+// they can sign in and see past submissions.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contacts (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at           TEXT NOT NULL,
+    name                 TEXT NOT NULL,
+    email                TEXT NOT NULL,
+    phone                TEXT,
+    fleet_submission_id  INTEGER REFERENCES fleet_submissions(id)
+  )
+`);
+
+const insertContactStmt = db.prepare(`
+  INSERT INTO contacts (created_at, name, email, phone, fleet_submission_id)
+  VALUES (@created_at, @name, @email, @phone, @fleet_submission_id)
+`);
+
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -86,6 +105,34 @@ app.post('/api/submit', (req, res) => {
     res.status(201).json({ success: true, id: info.lastInsertRowid });
   } catch (err) {
     console.error('Insert failed:', err);
+    res.status(500).json({ error: 'Database insert failed' });
+  }
+});
+
+app.post('/api/contact', (req, res) => {
+  const body = req.body || {};
+  const { name, email } = body;
+
+  const missing = [];
+  if (!name) missing.push('name');
+  if (!email) missing.push('email');
+  if (missing.length) {
+    return res.status(400).json({ error: 'Missing or invalid fields', fields: missing });
+  }
+
+  const row = {
+    created_at: new Date().toISOString(),
+    name: String(name),
+    email: String(email),
+    phone: body.phone ? String(body.phone) : null,
+    fleet_submission_id: typeof body.submissionId === 'number' ? body.submissionId : null,
+  };
+
+  try {
+    const info = insertContactStmt.run(row);
+    res.status(201).json({ success: true, id: info.lastInsertRowid });
+  } catch (err) {
+    console.error('Contact insert failed:', err);
     res.status(500).json({ error: 'Database insert failed' });
   }
 });

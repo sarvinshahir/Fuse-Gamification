@@ -10,7 +10,7 @@
 
 <canvas id="scene-canvas"></canvas>
 
-<img src="../Images/FuseLogoSVG.svg" alt="Fuse" class="fuse-logo">
+<a href="https://fuse-power.com/" target = "_blank"><img src="../Images/FuseLogoSVG.svg" alt="Fuse" class="fuse-logo"></a>
 
 <div class="progress" id="progress"></div>
 
@@ -149,7 +149,7 @@
     <div class="panel panel-card">
       <div class="section-label">Daily Usage</div>
       <div class="question">
-        <label>What is the average distance travelled per vehicle per day?</label>
+        <label>On a typical school day, how far does each bus drive?</label>
         <div class="dual-range">
           <div class="dual-range-track">
             <div class="dual-range-fill" id="distanceFill"></div>
@@ -238,9 +238,14 @@
         </div>
       </div>
 
+      <div class="value-callout">
+        <div class="value-callout-label">Estimated Annual V2G Value</div>
+        <div class="value-callout-amount" id="evStepValueAmount">$0</div>
+      </div>
+
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
-        <button class="btn-primary" data-next>Review &amp; Submit</button>
+        <button class="btn-primary" data-next>See How</button>
       </div>
     </div>
   </section>
@@ -268,18 +273,18 @@
   <!-- STEP 7 : REVIEW & SUBMIT -->
   <section class="step" data-step="7">
     <div class="panel panel-card">
-      <div class="section-label">Review &amp; Submit</div>
+      <div class="section-label">Electrification Scorecard</div>
 
       <div class="value-callout">
         <div class="value-callout-label">Estimated Annual V2G Value</div>
         <div class="value-callout-amount" id="valueAmount">$0</div>
       </div>
 
-      <dl class="summary" id="summary"></dl>
+      <div class="narrative" id="summary"></div>
 
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
-        <button class="btn-primary" id="submitBtn">Submit</button>
+        <button class="btn-primary" id="submitBtn">Learn More</button>
       </div>
       <div class="submit-status" id="submitStatus"></div>
     </div>
@@ -288,6 +293,39 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="contactModal">
+  <div class="modal-card">
+    <div class="section-label">Contact</div>
+    <p>Want to learn more about how V2G can turn your fleet into a revenue asset?
+       Get in touch with Fuse Power Management.</p>
+    <div class="modal-contact">
+      <div class="modal-contact-row"><span>Email</span><a href="mailto:sales@fuse.example">sales@fuse.example</a></div>
+      <div class="modal-contact-row"><span>Phone</span><a href="tel:+10000000000">(000) 000-0000</a></div>
+    </div>
+
+    <div class="modal-contact-form">
+      <p class="lead-note">Or leave your info and a Fuse rep will reach out to you —
+         this also lets you sign back in later to see your saved results.</p>
+      <div class="question">
+        <label for="contactName">Your Name</label>
+        <input type="text" id="contactName" placeholder="Full name">
+      </div>
+      <div class="question">
+        <label for="contactEmail">Your Email</label>
+        <input type="email" id="contactEmail" placeholder="you@company.com">
+      </div>
+      <div class="question">
+        <label for="contactPhone">Phone (optional)</label>
+        <input type="tel" id="contactPhone" placeholder="(000) 000-0000">
+      </div>
+      <button class="btn-primary" id="contactSaveBtn">Save my info</button>
+      <div class="contact-save-status" id="contactSaveStatus"></div>
+    </div>
+
+    <button class="btn-secondary" id="contactModalClose">Close</button>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="scene.js"></script>

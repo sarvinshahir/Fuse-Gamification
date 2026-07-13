@@ -253,39 +253,15 @@
   avgDistanceEl.addEventListener('input', updateDistanceUI);
   updateDistanceUI();
 
-  // ---------- step 6: EV percentage ----------
-  const evPercentEl = document.getElementById('evPercent');
-  const evFillEl = document.getElementById('evFill');
-  const evValueEl = document.getElementById('evValue');
-
-  function updateEvUI() {
-    const pct = Number(evPercentEl.value);
-    state.evPercent = pct;
-    evFillEl.style.left = '0';
-    evFillEl.style.width = pct + '%';
-    evValueEl.textContent = `${pct}% electric`;
-    syncEvTrucks();
-  }
-
-  function syncEvTrucks() {
-    if (currentStep !== 6) return;
-    FuseScene.SetEvFraction(state.evPercent / 100);
-  }
-
-  evPercentEl.addEventListener('input', updateEvUI);
-  updateEvUI();
-
-  // ---------- step 7: review + submit ----------
-  const YES_NO = v => (v === null ? '—' : v ? 'Yes' : 'No');
-
+  // ---------- V2G expected value calculation (used by both the EV% step and review) ----------
   // Placeholder market/vehicle assumptions — tune to real figures.
   const VALUE_ASSUMPTIONS = {
     heavyKwhPerKm: 1.8,        // full-size (heavy duty) bus energy use
     mediumKwhPerKm: 0.9,       // cutaway (medium duty) bus energy use
     chargerKw: 40,             // depot charger power rating
-    pricePerKwh: 1.5,         // $ paid per kWh of V2G energy sold back to the grid
+    pricePerKwh: 1.5,          // $ paid per kWh of V2G energy sold back to the grid
     heavyVehicleCost: 500000,  // incremental EV cost vs. diesel, heavy duty
-    mediumVehicleCost: 150000,  // incremental EV cost vs. diesel, medium duty
+    mediumVehicleCost: 150000, // incremental EV cost vs. diesel, medium duty
     daysPerYear: 365,
   };
 
@@ -303,8 +279,9 @@
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     const v2gUptime = Math.max(0, 24 - operatingHours - rechargeTime);
     const kWhReturned = (v2gUptime) * VALUE_ASSUMPTIONS.chargerKw;
-    return VALUE_ASSUMPTIONS.daysPerYear * evCount * kWhReturned * VALUE_ASSUMPTIONS.pricePerKwh
-      - vehicleCost * evCount;
+    return VALUE_ASSUMPTIONS.daysPerYear * evCount * kWhReturned * VALUE_ASSUMPTIONS.pricePerKwh;
+    //remove vehicle cost for now
+    //  - vehicleCost * evCount;
   }
 
   function computeExpectedValue() {
@@ -312,38 +289,98 @@
       + valueForFleet(state.mediumCount, VALUE_ASSUMPTIONS.mediumKwhPerKm, VALUE_ASSUMPTIONS.mediumVehicleCost);
   }
 
-  function renderValueCallout() {
+  // updates any value-callout amount element (by id) with the current expected value
+  function updateValueCallout(amountElId) {
+    const amountEl = document.getElementById(amountElId);
+    if (!amountEl) return;
     const expectedValue = computeExpectedValue();
-    const amountEl = document.getElementById('valueAmount');
-    const formatted = expectedValue.toLocaleString('en-CA', {
+    amountEl.textContent = expectedValue.toLocaleString('en-CA', {
       style: 'currency', currency: 'CAD', maximumFractionDigits: 0,
     });
-    amountEl.textContent = formatted;
     amountEl.classList.toggle('negative', expectedValue < 0);
   }
 
+  // hours a single vehicle of this type has left to sell power back to the
+  // grid each day, after its commute and its own recharge are accounted for
+  function v2gUptimeHoursFor(kwhPerKm) {
+    const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
+    const powerConsumed = state.avgDistanceKm * kwhPerKm;
+    const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
+    return Math.max(0, 24 - operatingHours - rechargeTime);
+  }
+
+  function pluralize(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
+  function formatHours(h) { return `${(Math.round(h * 10) / 10)} hour${Math.round(h * 10) === 10 ? '' : 's'}`; }
+
+  // ---------- step 6: EV percentage ----------
+  const evPercentEl = document.getElementById('evPercent');
+  const evFillEl = document.getElementById('evFill');
+  const evValueEl = document.getElementById('evValue');
+
+  function updateEvUI() {
+    const pct = Number(evPercentEl.value);
+    state.evPercent = pct;
+    evFillEl.style.left = '0';
+    evFillEl.style.width = pct + '%';
+    evValueEl.textContent = `${pct}% electric`;
+    updateValueCallout('evStepValueAmount');
+    syncEvTrucks();
+  }
+
+  function syncEvTrucks() {
+    if (currentStep !== 6) return;
+    FuseScene.SetEvFraction(state.evPercent / 100);
+  }
+
+  evPercentEl.addEventListener('input', updateEvUI);
+  updateEvUI();
+
+  // ---------- step 7: review + submit ----------
   function renderSummary() {
-    renderValueCallout();
-    const totalEVs = Math.round((state.heavyCount + state.mediumCount) * (state.evPercent / 100));
-    const rows = [
-      ['Company', state.companyName || '—'],
-      ['Location', state.location || '—'],
-      ['Medium duty vehicles', state.mediumCount],
-      ['Heavy duty vehicles', state.heavyCount],
-      ['Central depot', YES_NO(state.centralDepot)],
-      ['Land ownership', state.landOwnership || '—'],
-      ['Lease remaining (yrs)', state.leaseRemainingYears ?? '—'],
-      ['Strata approval required', YES_NO(state.strataApproval)],
-      ['Room for chargers', YES_NO(state.chargerRoom)],
-      ['Operating hours', `${formatHour(state.opsStartHour)} – ${formatHour(state.opsEndHour)}`],
-      ['Average distance/day', `${state.avgDistanceKm} km`],
-      ['EV percentage', `${state.evPercent}%`],
-      ['Electric vehicles', totalEVs],
-    ];
-    const summaryEl = document.getElementById('summary');
-    summaryEl.innerHTML = rows.map(([k, v]) =>
-      `<div class="row"><dt>${k}</dt><dd>${v}</dd></div>`
-    ).join('');
+    updateValueCallout('valueAmount');
+
+    const totalVehicles = state.heavyCount + state.mediumCount;
+    const evHeavy = Math.round(state.heavyCount * (state.evPercent / 100));
+    const evMedium = Math.round(state.mediumCount * (state.evPercent / 100));
+    const totalEVs = evHeavy + evMedium;
+
+    const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
+    const hoursAtDepot = Math.max(0, 24 - operatingHours);
+
+    const heavyUptime = v2gUptimeHoursFor(VALUE_ASSUMPTIONS.heavyKwhPerKm);
+    const mediumUptime = v2gUptimeHoursFor(VALUE_ASSUMPTIONS.mediumKwhPerKm);
+    const blendedUptime = totalEVs > 0
+      ? (evHeavy * heavyUptime + evMedium * mediumUptime) / totalEVs
+      : 0;
+
+    const paragraphs = [];
+
+    paragraphs.push(
+      `${state.companyName || 'Your fleet'} runs from <strong>${formatHour(state.opsStartHour)}</strong> ` +
+      `to <strong>${formatHour(state.opsEndHour)}</strong> — ${pluralize(Math.round(operatingHours * 10) / 10, 'hour')} ` +
+      `a day. That leaves <strong>${formatHours(hoursAtDepot)}</strong> overnight when every vehicle is parked back ` +
+      `at the depot — downtime today that V2G turns into paid time.`
+    );
+
+    paragraphs.push(
+      `Across your <strong>${pluralize(totalVehicles, 'vehicle')}</strong> — ${pluralize(state.heavyCount, 'heavy duty vehicle')} ` +
+      `and ${pluralize(state.mediumCount, 'medium duty vehicle')} — moving <strong>${state.evPercent}%</strong> to electric ` +
+      (totalEVs > 0
+        ? `puts <strong>${pluralize(totalEVs, 'EV')}</strong> on the road: ${pluralize(evHeavy, 'heavy duty')} and ` +
+          `${pluralize(evMedium, 'medium duty')}.`
+        : `hasn't put any EVs on the road yet — bump up the electrification slider to see the impact.`)
+    );
+
+    paragraphs.push(
+      totalEVs > 0
+        ? `At <strong>${state.avgDistanceKm} km</strong> of driving a day, each EV still has about ` +
+          `<strong>${formatHours(blendedUptime)}</strong> a day free to return power to the grid after its own ` +
+          `recharge — worth an estimated <strong>${computeExpectedValue().toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 })}</strong> a year across your fleet.`
+        : `Once some of your fleet goes electric, this is where you'll see how much daily driving distance leaves ` +
+          `for selling power back to the grid — and what that's worth over a year.`
+    );
+
+    document.getElementById('summary').innerHTML = paragraphs.map(p => `<p>${p}</p>`).join('');
   }
 
   const toastEl = document.getElementById('toast');
@@ -353,12 +390,62 @@
     setTimeout(() => toastEl.classList.remove('show'), 2400);
   }
 
+  // ---------- post-submit contact modal ----------
+  const contactModalEl = document.getElementById('contactModal');
+  let lastSubmissionId = null;
+
+  document.getElementById('contactModalClose').addEventListener('click', () => {
+    contactModalEl.classList.remove('show');
+  });
+  contactModalEl.addEventListener('click', e => {
+    if (e.target === contactModalEl) contactModalEl.classList.remove('show');
+  });
+
+  // Captures a lead's own contact info (separate from the fleet scorecard
+  // submission above) so Fuse can follow up. Keyed on email so that once
+  // account login exists, this same record can become their account.
+  const contactNameEl = document.getElementById('contactName');
+  const contactEmailEl = document.getElementById('contactEmail');
+  const contactPhoneEl = document.getElementById('contactPhone');
+  const contactSaveBtn = document.getElementById('contactSaveBtn');
+  const contactSaveStatusEl = document.getElementById('contactSaveStatus');
+
+  contactSaveBtn.addEventListener('click', async () => {
+    const name = contactNameEl.value.trim();
+    const email = contactEmailEl.value.trim();
+    const phone = contactPhoneEl.value.trim();
+    if (!name || !email) {
+      contactSaveStatusEl.className = 'contact-save-status err';
+      contactSaveStatusEl.textContent = 'Name and email are required.';
+      return;
+    }
+    contactSaveBtn.disabled = true;
+    contactSaveStatusEl.className = 'contact-save-status';
+    contactSaveStatusEl.textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone: phone || null, submissionId: lastSubmissionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || 'Could not save your info');
+      contactSaveStatusEl.className = 'contact-save-status ok';
+      contactSaveStatusEl.textContent = "Thanks — we'll be in touch!";
+    } catch (err) {
+      contactSaveStatusEl.className = 'contact-save-status err';
+      contactSaveStatusEl.textContent = err.message;
+      contactSaveBtn.disabled = false;
+    }
+  });
+
   document.getElementById('submitBtn').addEventListener('click', async () => {
     const btn = document.getElementById('submitBtn');
     const statusEl = document.getElementById('submitStatus');
     btn.disabled = true;
     statusEl.className = 'submit-status';
     statusEl.textContent = 'Submitting…';
+    let saved = false;
     try {
       const res = await fetch('/api/submit', {
         method: 'POST',
@@ -369,12 +456,17 @@
       if (!res.ok) throw new Error((data && data.error) || 'Submission failed');
       statusEl.className = 'submit-status ok';
       statusEl.textContent = `Submitted — reference #${data.id}`;
-      showToast('Saved to database');
+      lastSubmissionId = data.id;
+      saved = true;
     } catch (err) {
       statusEl.className = 'submit-status err';
       statusEl.textContent = err.message;
       btn.disabled = false;
     }
+    // show the toast + contact modal either way — a backend hiccup shouldn't
+    // block the user from seeing the value prop / how to get in touch
+    showToast(saved ? 'Saved to database' : "Couldn't save, but here's how to reach us");
+    contactModalEl.classList.add('show');
   });
 
   // ---------- init ----------
