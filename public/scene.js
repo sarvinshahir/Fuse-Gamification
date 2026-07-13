@@ -1,11 +1,12 @@
 // FuseScene: shared Three.js world reused across every wizard step.
 // One renderer/camera/ground; steps toggle which group is visible and
-// drive small animations (day/night, trucks parking, battery charging).
+// drive small animations (day/night, scenery pop-in).
 window.FuseScene = (function () {
   let renderer, camera, scene;
-  let ambLight, sunLight, sunMesh;
+  let ambLight, sunLight;
   let toonGradient;
   let groups = {};
+  let stage; // shared rotated/scaled parent for the city and depot groups
   let dayPhase = 0, dayPhaseTarget = 0;
   let raycaster = new THREE.Raycaster();
   let groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -13,10 +14,8 @@ window.FuseScene = (function () {
   let hitPt = new THREE.Vector3();
   let truckScale = 0.75;
 
-  const movers = [];       // { obj, target: Vector3, speed, onArrive }
   const scaleTweens = [];  // { obj, elapsed, duration, from, to }
-  const depotTrucks = [];
-  const cityTrucks = [];
+  let trucks; // THREE.Group of the currently spawned buses, child of stage (not groups.city/depot, so it isn't hidden when either toggles)
   let splashCar = null;
   const exhaustPuffs = []; // { mesh, age, maxAge, vel }
 
@@ -272,26 +271,6 @@ window.FuseScene = (function () {
     return g;
   }
 
-  function makeBatteryBar() {
-    const g = new THREE.Group();
-    const bg = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.9, 0.14),
-      new THREE.MeshBasicMaterial({ color: 0x1a1a1a })
-    );
-    g.add(bg);
-    const fill = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.84, 0.09),
-      new THREE.MeshBasicMaterial({ color: 0x33dd66 })
-    );
-    fill.position.z = 0.01;
-    fill.scale.x = 0.001;
-    fill.position.x = -0.42;
-    fill.geometry.translate(0.42, 0, 0); // scale from left edge
-    g.add(fill);
-    g.userData.fill = fill;
-    return g;
-  }
-
   function makeTree() {
     const g = new THREE.Group();
     const trunk = new THREE.Mesh(
@@ -380,34 +359,37 @@ window.FuseScene = (function () {
       CITY_SPOTS.push(new THREE.Vector3(2.4, 0, i));
       CITY_SPOTS.push(new THREE.Vector3(i, 0, -2.4));
     }
-    
-    g.rotation.y = Math.PI / 4;
-    g.scale.setScalar(0.5);
 
     return g;
   }
 
-  
+
   function cityPopIn(){
     groupPopIn(cityStaticObjects);
   }
 
-  function depotPopIn(){
-    groupPopIn(depotStaticObjects);
-  }
-
   // pops every road/building/tree in the city group in with a staggered scale tween
   function groupPopIn(objects, stagger = 20) {
+    
+    objects.forEach(obj => obj.scale.setScalar(0.001));
+    objects.forEach(obj => obj.visible = true);
+
     objects.forEach((obj, i) => {
       setTimeout(() => popInTo(obj, 1, 320), i * stagger);
     });
   }
 
+  function groupPopOut(objects, stagger = 20) {
+    objects.forEach((obj, i) => {
+      setTimeout(() => popInTo(obj, 0, 320), i * stagger);
+    });
+  }
+  
+
    function cityHide(stagger = 20) {
-    cityStaticObjects.forEach(obj => obj.scale.setScalar(0.001));
+    cityStaticObjects.forEach(obj => obj.visible = false);
   }
 
-  const DEPOT_SPOTS = [];
   const DEPOT_CHARGERS = [];
   const depotStaticObjects = []; // roads, buildings, trees — popped in via cityPopIn()
 
@@ -455,9 +437,8 @@ window.FuseScene = (function () {
         const line = makeLine(0.08, 5);
         line.position.set(x + 2.1, 0.02, rowZ);
         g.add(line);
-        
+
         depotStaticObjects.push(line);
-        DEPOT_SPOTS.push(new THREE.Vector3(x, 0, rowZ));
       }
       const lastLine = makeLine(0.08, 5);
       lastLine.position.set(-16 + 4 * 4.2 + 2.1 - 4.2, 0.02, rowZ);
@@ -472,9 +453,6 @@ window.FuseScene = (function () {
       }
     });
 
-    g.rotation.y = Math.PI / 4;
-    g.scale.setScalar(0.5);
-
     return g;
   }
 
@@ -485,8 +463,6 @@ window.FuseScene = (function () {
     const dist = 45;
     sunLight.position.set(Math.cos(elevAngle) * dist * 0.6, Math.max(Math.sin(elevAngle) * dist, 1.5), Math.sin(elevAngle) * dist * 0.3 + 10);
     sunLight.target.position.set(0, 0, 0);
-    sunMesh.position.copy(sunLight.position);
-    sunMesh.visible = elevAngle > -0.05;
 
     ambLight.intensity = THREE.MathUtils.lerp(1, 0.2, t);
     sunLight.intensity = THREE.MathUtils.lerp(1.5, 0.15, t);
@@ -498,11 +474,7 @@ window.FuseScene = (function () {
 
   function setDayPhase(target) { dayPhaseTarget = target; }
 
-  // ---------- movers / tweens ----------
-  function moveTo(obj, target, speed, onArrive) {
-    movers.push({ obj, target: target.clone(), speed, onArrive });
-  }
-
+  // ---------- tweens ----------
   function popInTo(obj, targetScale, duration = 350) {
     for (let i = scaleTweens.length - 1; i >= 0; i--) {
       if (scaleTweens[i].obj === obj) scaleTweens.splice(i, 1);
@@ -532,28 +504,6 @@ window.FuseScene = (function () {
     });
   }
 
-  function updateMovers(dt) {
-    for (let i = movers.length - 1; i >= 0; i--) {
-      const mv = movers[i];
-      const diff = new THREE.Vector3().subVectors(mv.target, mv.obj.position);
-      diff.y = 0;
-      const dist = diff.length();
-      if (dist < 0.15) {
-        mv.obj.position.copy(mv.target);
-        movers.splice(i, 1);
-        if (mv.onArrive) mv.onArrive();
-        continue;
-      }
-      const dir = diff.normalize();
-      mv.obj.position.addScaledVector(dir, Math.min(mv.speed, dist));
-      const targetAngle = Math.atan2(dir.x, dir.z);
-      let da = targetAngle - mv.obj.rotation.y;
-      while (da > Math.PI) da -= Math.PI * 2;
-      while (da < -Math.PI) da += Math.PI * 2;
-      mv.obj.rotation.y += da * 0.15;
-    }
-  }
-
   function updateTweens(dtMs) {
     for (let i = scaleTweens.length - 1; i >= 0; i--) {
       const tw = scaleTweens[i];
@@ -573,7 +523,7 @@ window.FuseScene = (function () {
 
   // ---------- public: city (fleet-size + hours) ----------
   function showFleetGrid(count) {
-    cityTrucks.splice(0).forEach(t => groups.city.remove(t));
+    [...trucks.children].forEach(t => trucks.remove(t));
     const spacingX = 3.5, spacingZ = 8;
     const cols = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));
     const rows = Math.ceil(count / cols);
@@ -585,8 +535,7 @@ window.FuseScene = (function () {
         const truck = makeFullSizeBus(truckScale);
         truck.position.set(startX + c * spacingX * truckScale, 0, startZ + r * spacingZ * truckScale);
         truck.scale.setScalar(0.001);
-        groups.city.add(truck);
-        cityTrucks.push(truck);
+        trucks.add(truck);
         setTimeout(() => truck.scale.setScalar(truckScale), placed * 30);
         placed++;
       }
@@ -595,23 +544,22 @@ window.FuseScene = (function () {
 
   function citySetVisibleCount(n) {
     n = Math.max(0, Math.min(n, CITY_SPOTS.length));
-    while (cityTrucks.length < n) {
-      const spot = CITY_SPOTS[cityTrucks.length % CITY_SPOTS.length];
+    while (trucks.children.length < n) {
+      const spot = CITY_SPOTS[trucks.children.length % CITY_SPOTS.length];
       const truck = makeFullSizeBus(0.7);
       truck.position.copy(spot);
       truck.rotation.y = spot.x !== 2.4 && spot.x !== -2.4 ? 0 : Math.PI / 2;
-      groups.city.add(truck);
+      trucks.add(truck);
       popIn(truck);
-      cityTrucks.push(truck);
     }
-    while (cityTrucks.length > n) {
-      const truck = cityTrucks.pop();
-      popOutAndRemove(truck, groups.city);
+    while (trucks.children.length > n) {
+      const truck = trucks.children[trucks.children.length - 1];
+      popOutAndRemove(truck, trucks);
     }
   }
 
   function cityReset() {
-    cityTrucks.splice(0).forEach(t => groups.city.remove(t));
+    [...trucks.children].forEach(t => trucks.remove(t));
   }
 
   // Swaps the first `fraction` share of the current city fleet to the EV bus
@@ -619,81 +567,65 @@ window.FuseScene = (function () {
   // to diesel, replacing each truck's mesh in place.
   function citySetEvFraction(fraction) {
     fraction = Math.max(0, Math.min(1, fraction));
-    const targetEv = Math.round(cityTrucks.length * fraction);
-    cityTrucks.forEach((truck, i) => {
+    const current = trucks.children.slice();
+    const targetEv = Math.round(current.length * fraction);
+    current.forEach((truck, i) => {
       const shouldBeEv = i < targetEv;
       if (!!truck.userData.isEV === shouldBeEv) return;
-      //this mucks up with the scaling in the transition
       const scale = truck.scale.x;
       const replacement = makeFullSizeBus(scale, shouldBeEv);
       replacement.position.copy(truck.position);
       replacement.rotation.copy(truck.rotation);
-      groups.city.add(replacement);
-      groups.city.remove(truck);
+      // splice in at the same index instead of trucks.add() (which appends),
+      // so repeated fraction changes keep selecting a stable "first N" order
+      const idx = trucks.children.indexOf(truck);
+      trucks.remove(truck);
+      trucks.children.splice(idx, 0, replacement);
+      replacement.parent = trucks;
       popInTo(replacement, truckScale, 250);
-      cityTrucks[i] = replacement;
     });
-  }
-
-  // ---------- public: depot ----------
-  function depotParkTrucks(count) {
-    count = Math.max(0, Math.min(count, DEPOT_SPOTS.length));
-    // remove extras
-    while (depotTrucks.length > count) {
-      const t = depotTrucks.pop();
-      if (t.userData.bar) t.remove(t.userData.bar);
-      groups.depot.remove(t);
-    }
-    while (depotTrucks.length < count) {
-      const idx = depotTrucks.length;
-      const spot = DEPOT_SPOTS[idx];
-      const truck = makeFullSizeBus(0.85);
-      truck.position.set(spot.x, 0, -30);
-      truck.rotation.y = 0;
-      groups.depot.add(truck);
-      depotTrucks.push(truck);
-      moveTo(truck, spot, 0.28, null);
-    }
-  }
-
-  function depotStartCharging() {
-    depotTrucks.forEach((truck, i) => {
-      if (truck.userData.bar) return;
-      const bar = makeBatteryBar();
-      bar.position.set(0, 2.6, 0);
-      truck.add(bar);
-      truck.userData.bar = bar;
-      const delay = i * 150;
-      setTimeout(() => tweenFill(bar.userData.fill, 2600), delay);
-    });
-  }
-
-  function tweenFill(fillMesh, duration) {
-    const start = performance.now();
-    function step(now) {
-      const p = Math.min((now - start) / duration, 1);
-      fillMesh.scale.x = Math.max(p, 0.001);
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
-
-  function depotSendTrucksOut() {
-    depotTrucks.splice(0).forEach((truck, i) => {
-      if (truck.userData.bar) truck.remove(truck.userData.bar);
-      const exit = new THREE.Vector3(truck.position.x, 0, -34);
-      moveTo(truck, exit, 0.32, () => groups.depot.remove(truck));
-    });
-  }
-
-  function depotReset() {
-    depotTrucks.splice(0).forEach(t => groups.depot.remove(t));
-    groupPopIn(depotStaticObjects);
   }
 
   // ---------- step control ----------
+  function sceneryFor(name) {
+    if (name === 'city') return cityStaticObjects;
+    if (name === 'depot') return depotStaticObjects;
+    return null;
+  }
+
+  const sceneryGen = {}; // guards delayed hide-after-popOut against a quick re-entry
+
+  function popInGroup(name) {
+    sceneryGen[name] = (sceneryGen[name] || 0) + 1;
+    groups[name].visible = true;
+    const objects = sceneryFor(name);
+    if (objects) groupPopIn(objects);
+  }
+
+  function popOutGroup(name, stagger = 20) {
+    const objects = sceneryFor(name);
+    if (objects && objects.length) {
+      groupPopOut(objects, stagger);
+      const gen = (sceneryGen[name] = (sceneryGen[name] || 0) + 1);
+      setTimeout(() => {
+        if (sceneryGen[name] === gen) groups[name].visible = false;
+      }, objects.length * stagger + 320);
+    } else {
+      groups[name].visible = false;
+    }
+  }
+
   function showOnly(name) {
-    Object.keys(groups).forEach(k => { groups[k].visible = (k === name); });
+    // trucks live directly on the stage (sibling of groups.city/groups.depot),
+    // so they stay visible across the city/depot steps and only hide on splash
+    stage.visible = name !== 'splash';
+    Object.keys(groups).forEach(k => {
+      if(k === name){
+        popInGroup(k);
+      }else{
+        popOutGroup(k);
+      }
+    });
   }
 
   function enterSplash() {
@@ -704,31 +636,17 @@ window.FuseScene = (function () {
 
   function enterCity() {
     showOnly('city');
-    setDayPhase(0);
     cityHide();
+    setDayPhase(0);
   }
 
   function enterDepot(hasDepot) {
     showOnly('depot');
-    if (hasDepot) {
-      setDayPhase(1);
-    } else {
-      setDayPhase(0.15);
-    }
-  }
-
-  function enterRecharge() {
-    showOnly('depot');
-    setDayPhase(1);
-    // give trucks time to finish driving into their spots before charging starts
-    setTimeout(() => {
-      depotStartCharging();
-      const chargeDelay = depotTrucks.length * 150 + 2600 + 600;
-      setTimeout(() => {
-        setDayPhase(0);
-        depotSendTrucksOut();
-      }, chargeDelay);
-    }, 1500);
+    // if (hasDepot) {
+    //   setDayPhase(1);
+    // } else {
+    //   setDayPhase(0.15);
+    // }
   }
 
   // ---------- lifecycle ----------
@@ -754,7 +672,6 @@ window.FuseScene = (function () {
 
     dayPhase += (dayPhaseTarget - dayPhase) * 0.03;
     updateSun();
-    updateMovers(dtMs / 16.6);
     updateTweens(dtMs);
 
     if (groups.splash.visible) {
@@ -777,8 +694,7 @@ window.FuseScene = (function () {
       }
       updateTruckExhaust(splashCar, dtMs);
     }
-    if (groups.city.visible) cityTrucks.forEach(t => updateTruckExhaust(t, dtMs));
-    if (groups.depot.visible) depotTrucks.forEach(t => updateTruckExhaust(t, dtMs));
+    if (stage.visible) trucks.children.forEach(t => updateTruckExhaust(t, dtMs));
     updateExhaustPuffs(dtMs);
 
     renderer.render(scene, camera);
@@ -816,12 +732,6 @@ window.FuseScene = (function () {
     scene.add(sunLight);
     scene.add(sunLight.target);
 
-    sunMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1.4, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xfff6cc })
-    );
-    scene.add(sunMesh);
-
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(140, 140),
       toonMat(0xffffff)
@@ -833,7 +743,24 @@ window.FuseScene = (function () {
     groups.splash = buildSplashGroup();
     groups.city = buildCityGroup();
     groups.depot = buildDepotGroup();
-    Object.values(groups).forEach(g => { g.visible = false; scene.add(g); });
+
+    groups.splash.visible = false;
+    scene.add(groups.splash);
+
+    // city and depot share one rotated/scaled "stage" instead of each
+    // repeating the same rotation.y/scale on themselves
+    stage = new THREE.Group();
+    stage.rotation.y = Math.PI / 4;
+    stage.scale.setScalar(0.5);
+    scene.add(stage);
+
+    groups.city.visible = false;
+    groups.depot.visible = false;
+    stage.add(groups.city);
+    stage.add(groups.depot);
+
+    trucks = new THREE.Group();
+    stage.add(trucks);
 
     addEventListener('resize', onResize);
     addEventListener('mousemove', onMouseMove);
@@ -847,15 +774,11 @@ window.FuseScene = (function () {
     enterSplash,
     enterCity,
     cityPopIn,
-    depotPopIn,
     enterDepot,
-    enterRecharge,
     showFleetGrid,
     citySetVisibleCount,
     citySetEvFraction,
     cityReset,
-    depotParkTrucks,
-    depotReset,
-    get cityTruckCount() { return cityTrucks.length; },
+    get truckCount() { return trucks.children.length; },
   };
 })();

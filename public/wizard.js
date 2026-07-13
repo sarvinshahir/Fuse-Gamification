@@ -63,23 +63,21 @@
         FuseScene.showFleetGrid(fleetCap(state.fleetSize));
         break;
       case 3:
-        
+        FuseScene.enterCity();
         FuseScene.cityPopIn();
         syncHoursTrucks();
         break;
       case 4:
-        FuseScene.depotReset();
+        FuseScene.enterDepot(true);
         applyDepotState();
         break;
       case 5:
-        FuseScene.depotReset();
-        FuseScene.depotParkTrucks(Math.min(fleetCap(state.fleetSize) || 6, 8));
-        FuseScene.enterRecharge();
+        FuseScene.citySetEvFraction(state.evPercent / 100);
         break;
       case 6:
-        FuseScene.enterCity();
-        FuseScene.showFleetGrid(fleetCap(state.fleetSize));
-        FuseScene.citySetEvFraction(state.evPercent / 100);
+        // FuseScene.enterCity();
+        // FuseScene.showFleetGrid(fleetCap(state.fleetSize));
+        // FuseScene.citySetEvFraction(state.evPercent / 100);
         break;
       case 7:
         renderSummary();
@@ -155,9 +153,7 @@
     const hasSelection = state.centralDepot !== null;
     nextButtonFor(4).disabled = !hasSelection;
     depotSubQuestions.classList.toggle('open', hasSelection);
-    FuseScene.enterDepot(state.centralDepot === true);
-    const count = state.centralDepot === true ? Math.min(fleetCap(state.fleetSize) || 6, 8) : 0;
-    FuseScene.depotParkTrucks(count);
+    // FuseScene.enterDepot(true); //state.centralDepot === true
   }
 
   document.querySelectorAll('input[name="landOwnership"]').forEach(radio => {
@@ -232,7 +228,7 @@
   }
 
   function syncEvTrucks() {
-    if (currentStep !== 6) return;
+    if (currentStep !== 5) return;
     FuseScene.citySetEvFraction(state.evPercent / 100);
   }
 
