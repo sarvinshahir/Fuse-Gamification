@@ -18,10 +18,11 @@ window.FuseScene = (function () {
   let groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let mouseNDC = new THREE.Vector2(1e6, 1e6);
   let hitPt = new THREE.Vector3();
-  let truckScale = 0.75;
+  let truckScale = 0.5;
+  let lot = null;
 
-  const spacingX = 4;
-  const spacingZ = 10;
+  const spacingX = 7.5;
+  const spacingZ = 15;
   
   let truckRows = 1;
   let truckColumns = 1;
@@ -479,10 +480,10 @@ window.FuseScene = (function () {
   // generated once; setCityExtent() below builds/removes rings on demand as
   // the average-distance-per-day value grows or shrinks.
   const CITY_RING_DEFS = [
-    { radius: 20, count: 12 },
-    { radius: 30, count: 16 },
-    { radius: 40, count: 20 },
-    { radius: 50, count: 24 },
+    { radius: 30, count: 12 },
+    { radius: 45, count: 16 },
+    { radius: 55, count: 20 },
+    { radius: 70, count: 24 },
   ];
   const CITY_COLORS = [0xff6b6b, 0xffd166, 0x5fd4ff, 0x9b6bff, 0x4ee6a0];
   const CITY_ROAD_WIDTH = 6;
@@ -670,30 +671,15 @@ window.FuseScene = (function () {
   function buildDepotGroup() {
     const g = new THREE.Group();
 
-    const lot = new THREE.Mesh(
-      new THREE.PlaneGeometry(34, 50),
+    lot = new THREE.Mesh(
+      new THREE.PlaneGeometry(38, 50),
       toonMat(0x3d4148)
     );
     lot.rotation.x = -Math.PI / 2;
-    lot.position.set(-4, 0.015,-6);
+    
     lot.receiveShadow = true;
     g.add(lot);
     depotStaticObjects.push(lot);
-
-    // shop building, back-right
-    const shop = makeBuildingBlock(9, 4.2, 6, 0xffd699);
-    shop.position.set(11, 0, -6);
-    g.add(shop);
-    depotStaticObjects.push(shop);
-
-    const shopGlass = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 2.2, 0.15),
-      toonMat(0x37dbe0, { transparent: true, opacity: 0.75 })
-    );
-    shopGlass.position.set(9, 1.5, -2.93);
-    g.add(shopGlass);
-
-    depotStaticObjects.push(shopGlass);
 
     [[-18, -2], [-18, 14], [18, -13]].forEach(([x, z]) => {
       const t = makeTree();
@@ -719,17 +705,22 @@ window.FuseScene = (function () {
     depotParkingObjects = [];
     DEPOT_CHARGERS.length = 0;
 
+  
+
+    lot.scale.set(truckRows * spacingX, 1, truckColumns * spacingZ);
+    groups.depot.position.set(1,0,0);
+
     count = Math.max(1, count);
     let placed = 0;
-    const startX = -((truckColumns) * spacingX) / 2;
-    const startZ = -((truckRows) * spacingZ) / 2;
+    const startX = -((truckColumns) * spacingX * truckScale) / 2;
+    const startZ = -((truckRows-1) * spacingZ * truckScale) / 2;
 
     for (let r = 0; r <= truckRows && placed < count; r++) {
-      const rowZ = startZ + r * spacingZ;
+        const rowZ = startZ + r * spacingZ * truckScale;
       
-      for (let c = 0; c <= truckColumns && placed < count; c++) {
+      for (let c = 0; c < truckColumns && placed < count; c++) {
         
-        const rowX = startX + c * spacingX;
+        const rowX = startX + c * spacingX * truckScale;
         const line = makeLine(0.08, 5);
         line.position.set(rowX, 0.02, rowZ);
         groups.depot.add(line);
@@ -824,17 +815,18 @@ window.FuseScene = (function () {
     const count = heavyCount + mediumCount;
     truckColumns = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));
     truckRows  = Math.ceil(count / truckColumns);
-    const startX = -((truckColumns - 1) * spacingX) / 2;
-    const startZ = -((truckRows - 1) * spacingZ) / 2;
+    const startX = -((truckColumns - 1) * spacingX * truckScale) / 2;
+    const startZ = -((truckRows - 1) * spacingZ * truckScale) / 2;
     let placed = 0;
     for (let r = 0; r < truckRows && placed < count; r++) {
+
       for (let c = 0; c < truckColumns && placed < count; c++) {
         const truck = placed < heavyCount ? makeFullSizeBus(truckScale) : makeCutawayBus(truckScale);
         truck.position.set(startX + c * spacingX * truckScale, 0, startZ + r * spacingZ * truckScale);
         truck.scale.setScalar(0.001);
         trucks.add(truck);
         // setTimeout(() => truck.scale.setScalar(truckScale), placed * 30);
-        setTimeout(() =>  popIn(truck, 200), placed * 20)
+        setTimeout(() =>  popInTo(truck, 0.75, 200), placed * 20)
         placed++;
       }
     }
@@ -885,7 +877,7 @@ window.FuseScene = (function () {
       trucks.remove(truck);
       trucks.children.splice(idx, 0, replacement);
       replacement.parent = trucks;
-      popInTo(replacement, truckScale, 250);
+      popInTo(replacement, 0.75, 250);
     });
   }
 
@@ -999,6 +991,36 @@ window.FuseScene = (function () {
     );
   }
 
+  // ---------- camera drag-to-orbit ----------
+  const CAMERA_DRAG_SPEED = 0.008; // radians of orbit per pixel of horizontal drag
+
+  function onCameraPointerDown(e) {
+    isDraggingCamera = true;
+    lastDragX = e.clientX;
+    canvasEl.setPointerCapture(e.pointerId);
+  }
+
+  function onCameraPointerMove(e) {
+    if (!isDraggingCamera) return;
+    const dx = e.clientX - lastDragX;
+    lastDragX = e.clientX;
+    cameraAngleTarget -= dx * CAMERA_DRAG_SPEED;
+  }
+
+  function onCameraPointerUp(e) {
+    isDraggingCamera = false;
+  }
+
+  function updateCameraOrbit() {
+    cameraAngle += (cameraAngleTarget - cameraAngle) * 0.15;
+    camera.position.set(
+      cameraTarget.x + Math.sin(cameraAngle) * cameraRadius,
+      cameraHeight,
+      cameraTarget.z + Math.cos(cameraAngle) * cameraRadius
+    );
+    camera.lookAt(cameraTarget);
+  }
+
   let lastTime = performance.now();
   function tick(now) {
     const dtMs = now - lastTime;
@@ -1007,6 +1029,7 @@ window.FuseScene = (function () {
     dayPhase += (dayPhaseTarget - dayPhase) * 0.03;
     updateSun();
     cameraZoom += (cameraZoomTarget - cameraZoom) * 0.04;
+    updateCameraOrbit();
     updateCameraFrustum();
     updateTweens(dtMs);
 
@@ -1030,7 +1053,7 @@ window.FuseScene = (function () {
       }
       updateTruckExhaust(splashCar, dtMs);
     }
-    if (stage.visible) trucks.children.forEach(t => updateTruckExhaust(t, dtMs));
+    if (groups.depot.visible) trucks.children.forEach(t => updateTruckExhaust(t, dtMs));
     updateExhaustPuffs(dtMs);
 
     renderer.render(scene, camera);
@@ -1049,7 +1072,10 @@ window.FuseScene = (function () {
       0.1, 300
     );
     camera.position.set(0, 16, 24);
-    camera.lookAt(0, 2, 0);
+    camera.lookAt(cameraTarget);
+    cameraRadius = camera.position.distanceTo(new THREE.Vector3(cameraTarget.x, camera.position.y, cameraTarget.z));
+    cameraHeight = camera.position.y;
+    cameraAngle = cameraAngleTarget = Math.atan2(camera.position.x - cameraTarget.x, camera.position.z - cameraTarget.z);
 
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -1103,6 +1129,10 @@ window.FuseScene = (function () {
 
     addEventListener('resize', onResize);
     addEventListener('mousemove', onMouseMove);
+    canvasEl.addEventListener('pointerdown', onCameraPointerDown);
+    canvasEl.addEventListener('pointermove', onCameraPointerMove);
+    canvasEl.addEventListener('pointerup', onCameraPointerUp);
+    canvasEl.addEventListener('pointercancel', onCameraPointerUp);
 
     updateSun();
     renderer.setAnimationLoop(tick);
