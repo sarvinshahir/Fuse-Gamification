@@ -12,8 +12,12 @@ window.FuseScene = (function () {
   const cameraTarget = new THREE.Vector3(0, 2, 0); // point the camera orbits around
   let cameraRadius = 24, cameraHeight = 16; // derived from the initial camera.position in init()
   let cameraAngle = 0, cameraAngleTarget = 0; // orbit azimuth around cameraTarget, in radians
+  let cameraUserZoom = 1, cameraUserZoomTarget = 1; // user-driven zoom (wheel/pinch), on top of cameraZoom
   let isDraggingCamera = false;
   let lastDragX = 0;
+  const activePointers = new Map(); // pointerId -> {x, y}, for drag-rotate vs. pinch-zoom
+  let pinchStartDist = null, pinchStartZoom = 1;
+  let cameraIdleMs = 0; // time since the last user drag/pinch; past a threshold, rotation eases back to the default heading
   let raycaster = new THREE.Raycaster();
   let groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let mouseNDC = new THREE.Vector2(1e6, 1e6);
@@ -93,6 +97,44 @@ window.FuseScene = (function () {
         scene.remove(p.mesh);
         p.mesh.material.dispose();
         exhaustPuffs.splice(i, 1);
+      }
+    }
+  }
+
+  // ---------- tire tracks ----------
+  const TRACK_GEO = new THREE.PlaneGeometry(0.12, 0.4);
+  const trackMarks = []; // { mesh, mats, age, maxAge }
+
+  // stamps a pair of tread marks (one per side) at pos, oriented along angle (rotation.y)
+  function spawnTireTracks(pos, angle, trackWidth = 0.5) {
+    const g = new THREE.Group();
+    g.position.set(pos.x, 0.011, pos.z);
+    g.rotation.y = angle;
+
+    const mats = [-1, 1].map(side => {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.35, depthWrite: false });
+      const mesh = new THREE.Mesh(TRACK_GEO, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.x = side * trackWidth;
+      g.add(mesh);
+      return mat;
+    });
+
+    scene.add(g);
+    trackMarks.push({ mesh: g, mats, age: 0, maxAge: 4000 });
+  }
+
+  function updateTireTracks(dtMs) {
+    for (let i = trackMarks.length - 1; i >= 0; i--) {
+      const tm = trackMarks[i];
+      tm.age += dtMs;
+      const t = Math.min(tm.age / tm.maxAge, 1);
+      const opacity = 0.35 * (1 - t);
+      tm.mats.forEach(m => { m.opacity = opacity; });
+      if (t >= 1) {
+        scene.remove(tm.mesh);
+        tm.mats.forEach(m => m.dispose());
+        trackMarks.splice(i, 1);
       }
     }
   }
@@ -740,13 +782,104 @@ window.FuseScene = (function () {
     }
   }
 
+  // ---------- powerlines (depot electrification) ----------
+  const powerlineObjects = []; // poles (Groups) and wires (Lines) currently in the depot
+  let powerlinesBuilt = false;
+
+  function makePowerPole(height = 6.5) {
+    const g = new THREE.Group();
+    const poleMat = toonMat(0x6b4a2f);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, height, 8), poleMat);
+    pole.position.y = height / 2;
+    pole.castShadow = true;
+    g.add(pole);
+
+    const crossarm = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.12), poleMat);
+    crossarm.position.y = height - 0.4;
+    g.add(crossarm);
+
+    const insulatorMat = toonMat(0xe0e0e0);
+    g.userData.wireAttachPoints = [-1, 1].map(side => {
+      const insulator = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.22, 6), insulatorMat);
+      insulator.position.set(side, height - 0.34, 0);
+      g.add(insulator);
+      return new THREE.Vector3(side, height - 0.22, 0);
+    });
+
+    return g;
+  }
+
+  function makePowerWire(a, b) {
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    mid.y -= 5; // slight sag
+    const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+    const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(10));
+    const mat = new THREE.LineBasicMaterial({ color: 0x1a1a1a });
+    return new THREE.Line(geo, mat);
+  }
+
+  // tears down any existing poles/wires; also called at the start of
+  // showPowerlines() so re-entering the step rebuilds against the current lot size
+  function hidePowerlines() {
+    powerlineObjects.forEach(obj => {
+      if (obj.isLine) {
+        groups.depot.remove(obj);
+        obj.geometry.dispose();
+        obj.material.dispose();
+      } else {
+        popOutAndRemove(obj, groups.depot);
+      }
+    });
+    powerlineObjects.length = 0;
+    powerlinesBuilt = false;
+  }
+
+  // pops in a row of poles + sagging wires along the depot lot's side edge,
+  // sized to the lot's current footprint (which grows with the fleet size)
+  function showPowerlines() {
+    hidePowerlines();
+    powerlinesBuilt = true;
+
+    const halfW = (lot.geometry.parameters.width * lot.scale.x) / 2;
+    const halfD = (lot.geometry.parameters.height * lot.scale.z) / 2;
+    const poleCount = Math.max(3, Math.round((halfD * 2) / 12) + 1);
+    const poleX = halfW + 3;
+
+    const poles = [];
+    for (let i = 0; i < poleCount; i++) {
+      const z = -halfD + (i / (poleCount - 1)) * halfD * 2;
+      const pole = makePowerPole();
+      pole.position.set(poleX, 0, z);
+      pole.scale.setScalar(0.001);
+      groups.depot.add(pole);
+      powerlineObjects.push(pole);
+      popIn(pole, 400);
+      poles.push(pole);
+    }
+
+    // wires strung once the poles have popped up
+    setTimeout(() => {
+      if (!powerlinesBuilt) return; // torn down again before the poles finished popping in
+      for (let i = 0; i < poles.length - 1; i++) {
+        const a = poles[i], b = poles[i + 1];
+        a.userData.wireAttachPoints.forEach((pt, side) => {
+          const wa = a.position.clone().add(pt);
+          const wb = b.position.clone().add(b.userData.wireAttachPoints[side]);
+          const wire = makePowerWire(wa, wb);
+          groups.depot.add(wire);
+          powerlineObjects.push(wire);
+        });
+      }
+    }, 400);
+  }
+
   // ---------- day/night ----------
   function updateSun() {
     const t = dayPhase;
     const elevAngle = THREE.MathUtils.lerp(Math.PI * 0.42, -Math.PI * 0.18, t);
     const dist = 45;
-    sunLight.position.set(Math.cos(elevAngle) * dist * 0.6, Math.max(Math.sin(elevAngle) * dist, 1.5), Math.sin(elevAngle) * dist * 0.3 + 10);
-    sunLight.target.position.set(0, 0, 0);
+    // sunLight.position.set(Math.cos(elevAngle) * dist * 0.6, Math.max(Math.sin(elevAngle) * dist, 1.5), Math.sin(elevAngle) * dist * 0.3 + 10);
+    // sunLight.target.position.set(0, 0, 0);
 
     ambLight.intensity = THREE.MathUtils.lerp(1, 0.2, t);
     sunLight.intensity = THREE.MathUtils.lerp(1.5, 0.15, t);
@@ -968,7 +1101,7 @@ window.FuseScene = (function () {
 
   function updateCameraFrustum() {
     const aspect = innerWidth / innerHeight;
-    const size = FRUSTUM_SIZE * cameraZoom;
+    const size = FRUSTUM_SIZE * cameraZoom * cameraUserZoom;
     camera.left = -size * aspect / 2;
     camera.right = size * aspect / 2;
     camera.top = size / 2;
@@ -991,28 +1124,89 @@ window.FuseScene = (function () {
     );
   }
 
-  // ---------- camera drag-to-orbit ----------
+  // ---------- camera drag-to-orbit + wheel/pinch zoom ----------
   const CAMERA_DRAG_SPEED = 0.008; // radians of orbit per pixel of horizontal drag
+  const CAMERA_WHEEL_SPEED = 0.0012; // zoom multiplier per pixel of wheel delta
+  const CAMERA_ZOOM_MIN = 0.5, CAMERA_ZOOM_MAX = 2.5;
+  const CAMERA_IDLE_RESET_MS = 2500; // how long to wait after the last drag before easing rotation back to default
+
+  function pointerDist() {
+    const pts = [...activePointers.values()];
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  }
 
   function onCameraPointerDown(e) {
-    isDraggingCamera = true;
-    lastDragX = e.clientX;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     canvasEl.setPointerCapture(e.pointerId);
+    cameraIdleMs = 0;
+
+    if (activePointers.size === 2) {
+      isDraggingCamera = false;
+      pinchStartDist = pointerDist();
+      pinchStartZoom = cameraUserZoomTarget;
+    } else if (activePointers.size === 1) {
+      isDraggingCamera = true;
+      lastDragX = e.clientX;
+    }
   }
 
   function onCameraPointerMove(e) {
-    if (!isDraggingCamera) return;
-    const dx = e.clientX - lastDragX;
-    lastDragX = e.clientX;
-    cameraAngleTarget -= dx * CAMERA_DRAG_SPEED;
+    if (!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.size >= 2) {
+      const dist = pointerDist();
+      if (pinchStartDist) {
+        const zoom = pinchStartZoom * (pinchStartDist / dist);
+        cameraUserZoomTarget = Math.max(CAMERA_ZOOM_MIN, Math.min(CAMERA_ZOOM_MAX, zoom));
+      }
+      cameraIdleMs = 0;
+    } else if (isDraggingCamera) {
+      const dx = e.clientX - lastDragX;
+      lastDragX = e.clientX;
+      cameraAngleTarget -= dx * CAMERA_DRAG_SPEED;
+      cameraIdleMs = 0;
+    }
   }
 
   function onCameraPointerUp(e) {
-    isDraggingCamera = false;
+    activePointers.delete(e.pointerId);
+    if (activePointers.size === 2) {
+      // still pinching with the remaining two pointers
+      pinchStartDist = pointerDist();
+      pinchStartZoom = cameraUserZoomTarget;
+    } else if (activePointers.size === 1) {
+      // dropped from pinch (or a second accidental touch) back to a single pointer — resume as a drag
+      pinchStartDist = null;
+      isDraggingCamera = true;
+      lastDragX = [...activePointers.values()][0].x;
+    } else {
+      pinchStartDist = null;
+      isDraggingCamera = false;
+    }
   }
 
-  function updateCameraOrbit() {
+  function onCameraWheel(e) {
+    e.preventDefault();
+    const zoom = cameraUserZoomTarget * (1 + e.deltaY * CAMERA_WHEEL_SPEED);
+    cameraUserZoomTarget = Math.max(CAMERA_ZOOM_MIN, Math.min(CAMERA_ZOOM_MAX, zoom));
+  }
+
+  function updateCameraOrbit(dtMs) {
+    if (isDraggingCamera || activePointers.size >= 2) {
+      cameraIdleMs = 0;
+    } else {
+      cameraIdleMs += dtMs;
+      if (cameraIdleMs > CAMERA_IDLE_RESET_MS) {
+        // ease back to the nearest default-heading equivalent, so it always
+        // takes the shortest path home instead of unwinding every full turn
+        const twoPi = Math.PI * 2;
+        cameraAngleTarget = Math.round(cameraAngle / twoPi) * twoPi;
+      }
+    }
+
     cameraAngle += (cameraAngleTarget - cameraAngle) * 0.15;
+    cameraUserZoom += (cameraUserZoomTarget - cameraUserZoom) * 0.1;
     camera.position.set(
       cameraTarget.x + Math.sin(cameraAngle) * cameraRadius,
       cameraHeight,
@@ -1029,7 +1223,7 @@ window.FuseScene = (function () {
     dayPhase += (dayPhaseTarget - dayPhase) * 0.03;
     updateSun();
     cameraZoom += (cameraZoomTarget - cameraZoom) * 0.04;
-    updateCameraOrbit();
+    updateCameraOrbit(dtMs);
     updateCameraFrustum();
     updateTweens(dtMs);
 
@@ -1041,20 +1235,25 @@ window.FuseScene = (function () {
       const diff = new THREE.Vector3().subVectors(splashTarget, splashCar.position);
       diff.y = 0;
       const dist = diff.length();
+      const maxSpeed = 0.33;
       if (dist > 0.08) {
         const dir = diff.clone().normalize();
-        const speed = Math.min(dist * 0.06, 0.24);
+        const speed = Math.min(dist * 0.1, maxSpeed);
         splashCar.position.addScaledVector(dir, speed);
         const targetAngle = Math.atan2(dir.x, dir.z);
         let da = targetAngle - splashCar.rotation.y;
         while (da > Math.PI) da -= Math.PI * 2;
         while (da < -Math.PI) da += Math.PI * 2;
-        splashCar.rotation.y += da * 0.1;
+        // scale the turn rate by how fast the car is actually moving, so it
+        // can't spin in place while sitting near the target
+        splashCar.rotation.y += da *  (speed / maxSpeed);
+
       }
       updateTruckExhaust(splashCar, dtMs);
     }
     if (groups.depot.visible) trucks.children.forEach(t => updateTruckExhaust(t, dtMs));
     updateExhaustPuffs(dtMs);
+    updateTireTracks(dtMs);
 
     renderer.render(scene, camera);
   }
@@ -1133,8 +1332,9 @@ window.FuseScene = (function () {
     canvasEl.addEventListener('pointermove', onCameraPointerMove);
     canvasEl.addEventListener('pointerup', onCameraPointerUp);
     canvasEl.addEventListener('pointercancel', onCameraPointerUp);
+    canvasEl.addEventListener('wheel', onCameraWheel, { passive: false });
 
-    updateSun();
+    // updateSun();
     renderer.setAnimationLoop(tick);
   }
 
@@ -1151,6 +1351,8 @@ window.FuseScene = (function () {
     setDistanceZoom,
     setCityExtent,
     setDepotFleetSize,
+    showPowerlines,
+    hidePowerlines,
     get truckCount() { return trucks.children.length; },
   };
 })();

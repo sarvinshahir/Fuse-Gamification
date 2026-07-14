@@ -15,6 +15,7 @@ html, body {
   height: 100%;
   z-index: 0;
   display: block;
+  touch-action: none;
 }
 
 .fuse-logo {
@@ -52,6 +53,7 @@ html, body {
   z-index: 10;
   height: 100vh;
   width: 100vw;
+  pointer-events: none;
 }
 
 .step {
@@ -60,6 +62,7 @@ html, body {
   display: none;
   align-items: center;
   padding: 0 8vw;
+  pointer-events: none;
 }
 
 .step.active { display: flex; }
@@ -104,6 +107,7 @@ html, body {
   padding: 34px 38px;
   width: 480px;
   max-width: 92vw;
+  pointer-events: auto;
 }
 
 .section-label {
@@ -178,7 +182,7 @@ select:focus { border-color: #0000ff; background: #fff; }
   transition: border-color 0.15s, background 0.15s;
 }
 
-.radio-group input, .checkbox-group input { width: auto; accent-color: #2a7de1; }
+.radio-group input, .checkbox-group input { width: auto; accent-color: #0000ff; }
 
 .radio-group label:has(input:checked),
 .checkbox-group label:has(input:checked) {

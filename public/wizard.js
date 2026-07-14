@@ -70,9 +70,11 @@
       case 5:
         FuseScene.enterDepot(true);
         applyDepotState();
+        FuseScene.hidePowerlines();
         break;
       case 6:
         FuseScene.SetEvFraction(state.evPercent / 100);
+        FuseScene.showPowerlines();
         break;
       case 7:
         renderSummary();
