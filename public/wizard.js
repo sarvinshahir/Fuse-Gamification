@@ -57,15 +57,15 @@
         break;
       case 2:
         FuseScene.enterCity();
+        FuseScene.hideCity();
         FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
         break;
       case 3:
         FuseScene.enterCity();
-        FuseScene.cityPopIn();
         syncHoursTrucks();
         break;
       case 4:
-        // FuseScene.enterCity();
+        FuseScene.enterCity();
         break;
       case 5:
         FuseScene.enterDepot(true);
@@ -146,6 +146,7 @@
   // user releases the slider (native 'change') rather than on every 'input'
   function redrawFleetGrid() {
     FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
+    FuseScene.setDepotFleetSize(state.heavyCount + state.mediumCount);
   }
 
   mediumCountEl.addEventListener('input', updateFleetSizeUI);
@@ -250,8 +251,17 @@
     distanceValueEl.textContent = `${km} km/day`;
   }
 
+  function updateCity(){
+    
+    const km = Number(avgDistanceEl.value);
+    FuseScene.setDistanceZoom(km);
+    FuseScene.setCityExtent(km);
+  }
+
   avgDistanceEl.addEventListener('input', updateDistanceUI);
+  avgDistanceEl.addEventListener("mouseup", updateCity);
   updateDistanceUI();
+  updateCity()
 
   // ---------- V2G expected value calculation (used by both the EV% step and review) ----------
   // Placeholder market/vehicle assumptions — tune to real figures.
