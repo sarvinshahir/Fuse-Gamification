@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mouse-Following Car</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+// Scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.025);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(0, 12, 18);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+const sun = new THREE.DirectionalLight(0xfff8e7, 1.6);
+sun.position.set(15, 30, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -30;
+sun.shadow.camera.right = sun.shadow.camera.top = 30;
+sun.shadow.camera.far = 100;
+scene.add(sun);
+
+// Ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(100, 100),
+  new THREE.MeshLambertMaterial({ color: 0x5a8c6a })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(100, 50, 0x4a7a5a, 0x4a7a5a);
+grid.position.y = 0.01;
+scene.add(grid);
+
+// Materials
+const carRed    = new THREE.MeshPhongMaterial({ color: 0xe63946, shininess: 120 });
+const carDark   = new THREE.MeshPhongMaterial({ color: 0xb02030, shininess: 60 });
+const black     = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 30 });
+const chrome    = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 200 });
+const glass     = new THREE.MeshPhongMaterial({ color: 0x99bbdd, transparent: true, opacity: 0.45, shininess: 300 });
+const hlMat     = new THREE.MeshPhongMaterial({ color: 0xffffcc, emissive: 0xffff88 });
+const tlMat     = new THREE.MeshPhongMaterial({ color: 0xff2200, emissive: 0xcc1100 });
+
+function mkBox(w, h, d, mat, x, y, z, rx = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.rotation.x = rx;
+  m.castShadow = true;
+  return m;
+}
+
+// === CAR ===  (front = local +Z)
+const car = new THREE.Group();
+
+// Lower body
+car.add(mkBox(2.3, 0.55, 4.4, carRed,  0, 0.62,  0));
+// Cabin
+car.add(mkBox(2.0, 0.7,  2.3, carDark, 0, 1.25,  0.05));
+// Hood slope
+car.add(mkBox(2.2, 0.12, 1.0, carRed,  0, 0.92,  1.55));
+// Front windshield
+car.add(mkBox(1.82, 0.6, 0.07, glass,  0, 1.26,  1.18, -0.28));
+// Rear windshield
+car.add(mkBox(1.82, 0.55, 0.07, glass, 0, 1.23, -1.15,  0.22));
+// Side windows
+const winMat = new THREE.MeshPhongMaterial({ color: 0x99bbdd, transparent: true, opacity: 0.35, shininess: 300 });
+car.add(mkBox(0.06, 0.5, 1.25, winMat, -1.01, 1.25, 0));
+car.add(mkBox(0.06, 0.5, 1.25, winMat,  1.01, 1.25, 0));
+
+// Bumpers
+car.add(mkBox(2.35, 0.28, 0.14, chrome, 0, 0.44,  2.25));
+car.add(mkBox(2.35, 0.28, 0.14, chrome, 0, 0.44, -2.25));
+
+// Headlights (front = +Z)
+car.add(mkBox(0.38, 0.18, 0.08, hlMat, -0.68, 0.73,  2.22));
+car.add(mkBox(0.38, 0.18, 0.08, hlMat,  0.68, 0.73,  2.22));
+// Taillights
+car.add(mkBox(0.48, 0.18, 0.08, tlMat, -0.68, 0.73, -2.22));
+car.add(mkBox(0.48, 0.18, 0.08, tlMat,  0.68, 0.73, -2.22));
+
+// Exhaust
+const exh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.22, 8), chrome);
+exh.rotation.x = Math.PI / 2;
+exh.position.set(0.55, 0.32, -2.28);
+car.add(exh);
+
+// Wheels: cylinder axis along local X of wheel group
+// group.rotation.z = PI/2 tips the Y-axis cylinder onto its side (along X)
+// inner spinGroup.rotation.y drives the axle spin
+const wheelCfg = [
+  { x: -1.22, y: 0.4, z:  1.35 }, // FL
+  { x:  1.22, y: 0.4, z:  1.35 }, // FR
+  { x: -1.22, y: 0.4, z: -1.35 }, // RL
+  { x:  1.22, y: 0.4, z: -1.35 }, // RR
+];
+const spinGroups = [];
+const tireGeo   = new THREE.CylinderGeometry(0.4, 0.4, 0.27, 24);
+const hubGeo    = new THREE.CylinderGeometry(0.17, 0.17, 0.29, 8);
+const spokeGeo  = new THREE.BoxGeometry(0.05, 0.36, 0.05);
+
+wheelCfg.forEach(cfg => {
+  const tiltGroup = new THREE.Group();
+  tiltGroup.position.set(cfg.x, cfg.y, cfg.z);
+  tiltGroup.rotation.z = Math.PI / 2;
+
+  const spin = new THREE.Group();
+
+  const tire = new THREE.Mesh(tireGeo, black);
+  tire.castShadow = true;
+  spin.add(tire);
+
+  const hub = new THREE.Mesh(hubGeo, chrome);
+  spin.add(hub);
+
+  // Visible spokes so spin is noticeable
+  for (let i = 0; i < 4; i++) {
+    const spoke = new THREE.Mesh(spokeGeo, chrome);
+    spoke.rotation.z = (Math.PI / 4) * i;
+    spin.add(spoke);
+  }
+
+  tiltGroup.add(spin);
+  car.add(tiltGroup);
+  spinGroups.push(spin);
+});
+
+scene.add(car);
+
+// Mouse → ground plane tracking
+const mouse2D   = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+const gPlane    = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const target    = new THREE.Vector3(0, 0, 0);
+const hitPt     = new THREE.Vector3();
+
+addEventListener('mousemove', e => {
+  mouse2D.set(
+    (e.clientX / innerWidth)  * 2 - 1,
+    -(e.clientY / innerHeight) * 2 + 1
+  );
+  raycaster.setFromCamera(mouse2D, camera);
+  if (raycaster.ray.intersectPlane(gPlane, hitPt)) {
+    target.copy(hitPt);
+  }
+});
+
+let wheelAngle = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const diff = new THREE.Vector3().subVectors(target, car.position);
+  diff.y = 0;
+  const dist = diff.length();
+
+  if (dist > 0.08) {
+    const dir = diff.clone().normalize();
+
+    // Move car toward target (speed increases with distance up to a cap)
+    const speed = Math.min(dist * 0.055, 0.22);
+    car.position.addScaledVector(dir, speed);
+
+    // Rotate car to face movement direction (front = local +Z)
+    const targetAngle = Math.atan2(dir.x, dir.z);
+    let da = targetAngle - car.rotation.y;
+    while (da >  Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    car.rotation.y += da * 0.1;
+
+    // Spin wheels
+    wheelAngle -= speed * 1.5;
+    spinGroups.forEach(s => { s.rotation.y = wheelAngle; });
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
