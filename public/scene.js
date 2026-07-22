@@ -27,6 +27,9 @@ window.FuseScene = (function () {
 
   const spacingX = 7.5;
   const spacingZ = 15;
+
+  let roadNS = null;
+  let roadEW = null;
   
   let truckRows = 1;
   let truckColumns = 1;
@@ -575,13 +578,14 @@ window.FuseScene = (function () {
   // tears down the rings' actual meshes on demand as distanceKm changes.
   function generateCityBuildingSlots(g) {
     const roadMat = toonMat(0xdddddd);
-    const roadNS = new THREE.Mesh(new THREE.PlaneGeometry(5, 90), roadMat);
-    roadNS.rotation.x = -Math.PI / 2;
+    roadNS = new THREE.Mesh(new THREE.PlaneGeometry(1, 5), roadMat);
+    roadNS.rotation.x = -Math.PI/2;
+    roadNS.rotation.z = -Math.PI/2;
     roadNS.position.y = 0.02;
     roadNS.receiveShadow = true;
     g.add(roadNS);
     cityStaticObjects.push(roadNS);
-    const roadEW = new THREE.Mesh(new THREE.PlaneGeometry(90, 5), roadMat);
+    roadEW = new THREE.Mesh(new THREE.PlaneGeometry(1, 5), roadMat);
     roadEW.rotation.x = -Math.PI / 2;
     roadEW.position.y = 0.02;
     roadEW.receiveShadow = true;
@@ -644,6 +648,9 @@ window.FuseScene = (function () {
       //   ringRoad.built = false;
       // }
     });
+
+    roadNS.scale.x = 50 + distanceKm/3;
+    roadEW.scale.x = 50 + distanceKm/3;
 
     cityBuildingSlots.forEach((slot, i) => {
       const shouldBeBuilt = slot.ring < activeRings;

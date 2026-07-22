@@ -329,9 +329,19 @@
     //  - vehicleCost * evCount;
   }
 
+  // fuel spend avoided is proportional to how much of the fleet goes electric
+  function computeFuelSavings() {
+    return state.annual_fuel_spend * (state.pct_ev / 100);
+  }
+
   function computeExpectedValue() {
     return valueForFleet(state.heavyCount, VALUE_ASSUMPTIONS.heavyKwhPerKm, VALUE_ASSUMPTIONS.heavyVehicleCost)
-      + valueForFleet(state.mediumCount, VALUE_ASSUMPTIONS.mediumKwhPerKm, VALUE_ASSUMPTIONS.mediumVehicleCost);
+      + valueForFleet(state.mediumCount, VALUE_ASSUMPTIONS.mediumKwhPerKm, VALUE_ASSUMPTIONS.mediumVehicleCost)
+      + computeFuelSavings();
+  }
+
+  function formatCurrency(amount) {
+    return amount.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
   }
 
   // updates any value-callout amount element (by id) with the current expected value
@@ -339,9 +349,7 @@
     const amountEl = document.getElementById(amountElId);
     if (!amountEl) return;
     const expectedValue = computeExpectedValue();
-    amountEl.textContent = expectedValue.toLocaleString('en-CA', {
-      style: 'currency', currency: 'CAD', maximumFractionDigits: 0,
-    });
+    amountEl.textContent = formatCurrency(expectedValue);
     amountEl.classList.toggle('negative', expectedValue < 0);
   }
 
@@ -416,11 +424,16 @@
         : `hasn't put any EVs on the road yet — bump up the electrification slider to see the impact.`)
     );
 
+    const fuelSavings = computeFuelSavings();
+
     paragraphs.push(
       totalEVs > 0
         ? `At <strong>${state.distance_km} km</strong> of driving a day, each EV still has about ` +
           `<strong>${formatHours(blendedUptime)}</strong> a day free to return power to the grid after its own ` +
-          `recharge — worth an estimated <strong>${computeExpectedValue().toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 })}</strong> a year across your fleet.`
+          `recharge — worth an estimated <strong>${formatCurrency(computeExpectedValue())}</strong> a year across your fleet` +
+          (fuelSavings > 0
+            ? `, including <strong>${formatCurrency(fuelSavings)}</strong> in fuel spend avoided by going electric.`
+            : `.`)
         : `Once some of your fleet goes electric, this is where you'll see how much daily driving distance leaves ` +
           `for selling power back to the grid — and what that's worth over a year.`
     );
@@ -456,10 +469,10 @@
   const contactSaveStatusEl = document.getElementById('contactSaveStatus');
 
   contactSaveBtn.addEventListener('click', async () => {
-    const name = contactNameEl.value.trim();
+    const contact_name = contactNameEl.value.trim();
     const email = contactEmailEl.value.trim();
     const phone = contactPhoneEl.value.trim();
-    if (!name || !email) {
+    if (!contact_name || !email) {
       contactSaveStatusEl.className = 'contact-save-status err';
       contactSaveStatusEl.textContent = 'Name and email are required.';
       return;
@@ -471,8 +484,19 @@
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone: phone || null, submissionId: lastSubmissionId }),
+        body: JSON.stringify({ contact_name, email, phone: phone || null, submissionId: lastSubmissionId }),
       });
+
+      // await fetch("http://localhost:8000/contact", {
+      //         method: "POST",
+      //         headers: { "Content-Type": "application/json" },
+      //         body: JSON.stringify({
+      //           ...contact,
+      //           fleet_size: answers.fleet_size,
+      //           ev_count: Math.round(answers.fleet_size * answers.pct_ev / 100),
+      //         }),
+      //       });
+
       const data = await res.json();
       if (!res.ok) throw new Error((data && data.error) || 'Could not save your info');
       contactSaveStatusEl.className = 'contact-save-status ok';
