@@ -1,21 +1,36 @@
 (function () {
   const state = {
     companyName: '',
-    location: '',
+    province: '',
     mediumCount: 0,
     heavyCount: 0,
+    fleet_size: 0,
     centralDepot: null,
     landOwnership: null,
     leaseRemainingYears: null,
     strataApproval: null,
-    chargerRoom: null,
     opsStartHour: 7,
     opsEndHour: 18,
-    avgDistanceKm: 150,
-    evPercent: 0,
+    distance_km: 150,
+    pct_ev: 0,
+    annual_fuel_spend: 0
   };
 
-  const TOTAL_STEPS = 8; // steps 0..7
+  // const response = await fetch("http://localhost:8000/calculate", {
+  //   method: "POST",
+  //   headers: { "Content-Type": "application/json" },
+  //   body: JSON.stringify({
+  //     fleet_size: updatedAnswers.fleet_size,
+  //     pct_ev: updatedAnswers.pct_ev,
+  //     vehicle_size: updatedAnswers.vehicle_size,
+  //     daily_km: updatedAnswers.daily_km,
+  //     operating_hours: updatedAnswers.operating_hours,
+  //     province: updatedAnswers.province,
+  //     annual_fuel_spend: updatedAnswers.annual_fuel_spend,
+  //   }),
+  // });
+
+  const TOTAL_STEPS = 9; // steps 0..8
   let currentStep = 0;
 
   FuseScene.init(document.getElementById('scene-canvas'));
@@ -68,15 +83,18 @@
         FuseScene.enterCity();
         break;
       case 5:
+        FuseScene.enterCity();
+        break;
+      case 6:
         FuseScene.enterDepot(true);
         applyDepotState();
         FuseScene.hidePowerlines();
         break;
-      case 6:
-        FuseScene.SetEvFraction(state.evPercent / 100);
+      case 7:
+        FuseScene.SetEvFraction(state.pct_ev / 100);
         FuseScene.showPowerlines();
         break;
-      case 7:
+      case 8:
         renderSummary();
         break;
     }
@@ -113,7 +131,7 @@
     validateStep1();
   });
   locationEl.addEventListener('change', () => {
-    state.location = locationEl.value;
+    state.province = locationEl.value;
     validateStep1();
   });
  
@@ -178,9 +196,8 @@
 
   function applyDepotState() {
     const hasSelection = state.centralDepot !== null;
-    nextButtonFor(5).disabled = !hasSelection;
+    nextButtonFor(6).disabled = !hasSelection;
     depotSubQuestions.classList.toggle('open', hasSelection);
-    // FuseScene.enterDepot(true); //state.centralDepot === true
   }
 
   document.querySelectorAll('input[name="landOwnership"]').forEach(radio => {
@@ -189,15 +206,18 @@
       leaseYearsQuestion.hidden = radio.value !== 'lease';
     });
   });
+
   document.getElementById('leaseYears').addEventListener('input', e => {
     state.leaseRemainingYears = e.target.value === '' ? null : Number(e.target.value);
   });
+
   document.querySelectorAll('input[name="strataApproval"]').forEach(radio => {
     radio.addEventListener('change', () => { state.strataApproval = radio.value === 'yes'; });
   });
-  document.querySelectorAll('input[name="chargerRoom"]').forEach(radio => {
-    radio.addEventListener('change', () => { state.chargerRoom = radio.value === 'yes'; });
-  });
+
+  // document.querySelectorAll('input[name="chargerRoom"]').forEach(radio => {
+  //   radio.addEventListener('change', () => { state.chargerRoom = radio.value === 'yes'; });
+  // });
 
   // ---------- step 4: operating hours ----------
   const opsStartEl = document.getElementById('opsStart');
@@ -247,7 +267,7 @@
 
   function updateDistanceUI() {
     const km = Number(avgDistanceEl.value);
-    state.avgDistanceKm = km;
+    state.distance_km = km;
     distanceFillEl.style.left = '0';
     distanceFillEl.style.width = (km / Number(avgDistanceEl.max)) * 100 + '%';
     distanceValueEl.textContent = `${km} km/day`;
@@ -264,6 +284,19 @@
   avgDistanceEl.addEventListener("mouseup", updateCity);
   updateDistanceUI();
   updateCity()
+
+  // ---------- step 5: average annual fuel spend ----------
+  const fuelSpendEl = document.getElementById('fuelSpend');
+
+  function updateFuelSpendUI() {
+    // strip anything that isn't a digit so only whole numbers can ever land in state
+    const digitsOnly = fuelSpendEl.value.replace(/[^\d]/g, '');
+    if (digitsOnly !== fuelSpendEl.value) fuelSpendEl.value = digitsOnly;
+    state.annual_fuel_spend = digitsOnly === '' ? 0 : Number(digitsOnly);
+  }
+
+  fuelSpendEl.addEventListener('input', updateFuelSpendUI);
+  updateFuelSpendUI();
 
   // ---------- V2G expected value calculation (used by both the EV% step and review) ----------
   // Placeholder market/vehicle assumptions — tune to real figures.
@@ -284,10 +317,10 @@
   // kWhReturned = V2G uptime / 2 * chargerKw
   // value = days * #EVs * kWhReturned * $/kWh - vehicleCost * #EVs
   function valueForFleet(count, kwhPerKm, vehicleCost) {
-    const evCount = Math.round(count * (state.evPercent / 100));
+    const evCount = Math.round(count * (state.pct_ev / 100));
     if (evCount <= 0) return 0;
     const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
-    const powerConsumed = state.avgDistanceKm * kwhPerKm;
+    const powerConsumed = state.distance_km * kwhPerKm;
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     const v2gUptime = Math.max(0, 24 - operatingHours - rechargeTime);
     const kWhReturned = (v2gUptime) * VALUE_ASSUMPTIONS.chargerKw;
@@ -316,7 +349,7 @@
   // grid each day, after its commute and its own recharge are accounted for
   function v2gUptimeHoursFor(kwhPerKm) {
     const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
-    const powerConsumed = state.avgDistanceKm * kwhPerKm;
+    const powerConsumed = state.distance_km * kwhPerKm;
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     return Math.max(0, 24 - operatingHours - rechargeTime);
   }
@@ -325,13 +358,13 @@
   function formatHours(h) { return `${(Math.round(h * 10) / 10)} hour${Math.round(h * 10) === 10 ? '' : 's'}`; }
 
   // ---------- step 6: EV percentage ----------
-  const evPercentEl = document.getElementById('evPercent');
+  const pct_evEl = document.getElementById('evPercent');
   const evFillEl = document.getElementById('evFill');
   const evValueEl = document.getElementById('evValue');
 
   function updateEvUI() {
-    const pct = Number(evPercentEl.value);
-    state.evPercent = pct;
+    const pct = Number(pct_evEl.value);
+    state.pct_ev = pct;
     evFillEl.style.left = '0';
     evFillEl.style.width = pct + '%';
     evValueEl.textContent = `${pct}% electric`;
@@ -340,11 +373,11 @@
   }
 
   function syncEvTrucks() {
-    if (currentStep !== 6) return;
-    FuseScene.SetEvFraction(state.evPercent / 100);
+    if (currentStep !== 7) return;
+    FuseScene.SetEvFraction(state.pct_ev / 100);
   }
 
-  evPercentEl.addEventListener('input', updateEvUI);
+  pct_evEl.addEventListener('input', updateEvUI);
   updateEvUI();
 
   // ---------- step 7: review + submit ----------
@@ -352,8 +385,8 @@
     updateValueCallout('valueAmount');
 
     const totalVehicles = state.heavyCount + state.mediumCount;
-    const evHeavy = Math.round(state.heavyCount * (state.evPercent / 100));
-    const evMedium = Math.round(state.mediumCount * (state.evPercent / 100));
+    const evHeavy = Math.round(state.heavyCount * (state.pct_ev / 100));
+    const evMedium = Math.round(state.mediumCount * (state.pct_ev / 100));
     const totalEVs = evHeavy + evMedium;
 
     const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
@@ -376,7 +409,7 @@
 
     paragraphs.push(
       `Across your <strong>${pluralize(totalVehicles, 'vehicle')}</strong> — ${pluralize(state.heavyCount, 'heavy duty vehicle')} ` +
-      `and ${pluralize(state.mediumCount, 'medium duty vehicle')} — moving <strong>${state.evPercent}%</strong> to electric ` +
+      `and ${pluralize(state.mediumCount, 'medium duty vehicle')} — moving <strong>${state.pct_ev}%</strong> to electric ` +
       (totalEVs > 0
         ? `puts <strong>${pluralize(totalEVs, 'EV')}</strong> on the road: ${pluralize(evHeavy, 'heavy duty')} and ` +
           `${pluralize(evMedium, 'medium duty')}.`
@@ -385,7 +418,7 @@
 
     paragraphs.push(
       totalEVs > 0
-        ? `At <strong>${state.avgDistanceKm} km</strong> of driving a day, each EV still has about ` +
+        ? `At <strong>${state.distance_km} km</strong> of driving a day, each EV still has about ` +
           `<strong>${formatHours(blendedUptime)}</strong> a day free to return power to the grid after its own ` +
           `recharge — worth an estimated <strong>${computeExpectedValue().toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 })}</strong> a year across your fleet.`
         : `Once some of your fleet goes electric, this is where you'll see how much daily driving distance leaves ` +

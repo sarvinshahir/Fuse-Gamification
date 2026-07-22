@@ -44,10 +44,15 @@
       </div>
 
       <div class="question">
-        <label for="location">Location</label>
+        <label for="location">Province</label>
         <select id="location">
           <option value="">— Select —</option>
-          <option value="Abbotsford">Abbotsford</option>
+          <option value="BC">British Columbia</option>
+          <option value="ON">Ontario</option>
+          <option value="QC">Québec</option>
+          <option value="NS">Nova Scotia</option>
+          
+          <!-- <option value="Abbotsford">Abbotsford</option>
           <option value="Burnaby">Burnaby</option>
           <option value="Campbell Rive">Campbell River</option>
           <option value="Chilliwack">Chilliwack</option>
@@ -67,7 +72,7 @@
           <option value="Surrey">Surrey</option>
           <option value="Vancouver">Vancouver</option>
           <option value="Victoria">Victoria</option>
-          <option value="White Rock">White Rock</option>
+          <option value="White Rock">White Rock</option> -->
         </select>
       </div>
 
@@ -169,8 +174,24 @@
     </div>
   </section>
 
-  <!-- STEP 5 : DEPOT -->
+  <!-- STEP 5 : AVERAGE ANNUAL FUEL SPEND -->
   <section class="step" data-step="5">
+    <div class="panel panel-card">
+      <div class="section-label">Daily Usage</div>
+      <div class="question">
+        <label for="fuelSpend">What is your average annual fuel spend?</label>
+        <input type="number" id="fuelSpend" min="0" step="1" inputmode="numeric" placeholder="e.g. 50000">
+      </div>
+
+      <div class="step-nav">
+        <button class="btn-secondary" data-back>Back</button>
+        <button class="btn-primary" data-next>Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 6 : DEPOT -->
+  <section class="step" data-step="6">
     <div class="panel panel-card">
       <div class="section-label">Depot</div>
 
@@ -203,7 +224,7 @@
             <label><input type="radio" name="strataApproval" value="no"> No</label>
           </div>
         </div>
-
+<!-- 
         <div class="question">
           <label>Is there enough room for charger(s)?</label>
           <div class="radio-group">
@@ -211,7 +232,7 @@
             <label><input type="radio" name="chargerRoom" value="no"> No</label>
           </div>
         </div>
-      </div>
+      </div> -->
 
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
@@ -220,8 +241,8 @@
     </div>
   </section>
 
-  <!-- STEP 6: EV PERCENTAGE -->
-  <section class="step" data-step="6">
+  <!-- STEP 7: EV PERCENTAGE -->
+  <section class="step" data-step="7">
     <div class="panel panel-card">
       <div class="section-label">Electrification</div>
       <div class="question">
@@ -270,8 +291,8 @@
     </div>
   </section> -->
 
-  <!-- STEP 7 : REVIEW & SUBMIT -->
-  <section class="step" data-step="7">
+  <!-- STEP 8 : REVIEW & SUBMIT -->
+  <section class="step" data-step="8">
     <div class="panel panel-card">
       <div class="section-label">Electrification Scorecard</div>
 
