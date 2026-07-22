@@ -84,6 +84,50 @@ def calculate_v2g_revenue(data: SurveyInput):
         "total_benefit_high": round((annual_v2g + diesel_savings) * 1.3)
     }
 
+class ContactInfo(BaseModel):
+    company_name: str
+    contact_name: str
+    email: str
+    phone: str = ""
+    fleet_size: int = 0
+    ev_count: int = 0
+    depot_location: str = ""
+    best_time: str = ""
+    notes: str = ""
+
+@app.post("/contact")
+def save_contact(data: ContactInfo):
+    conn = sqlite3.connect("gamification.db")
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name TEXT,
+            contact_name TEXT,
+            email TEXT,
+            phone TEXT,
+            fleet_size INTEGER,
+            ev_count INTEGER,
+            depot_location TEXT,
+            best_time TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    c.execute("""
+        INSERT INTO contacts (
+            company_name, contact_name, email, phone,
+            fleet_size, ev_count, depot_location, best_time, notes
+        ) VALUES (?,?,?,?,?,?,?,?,?)
+    """, (
+        data.company_name, data.contact_name, data.email, data.phone,
+        data.fleet_size, data.ev_count, data.depot_location,
+        data.best_time, data.notes
+    ))
+    conn.commit()
+    conn.close()
+    return {"message": "Contact saved successfully"}
+
 # API endpoint
 @app.post("/calculate")
 def calculate(data: SurveyInput):
