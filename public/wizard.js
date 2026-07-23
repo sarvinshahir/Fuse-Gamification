@@ -9,8 +9,8 @@
     landOwnership: null,
     leaseRemainingYears: null,
     strataApproval: null,
-    distance_km: 150,
-    operating_hours = 9,
+    daily_km: 150,
+    operating_hours: 9,
     pct_ev: 0,
     annual_fuel_spend: 0
   };
@@ -255,7 +255,7 @@
 
   function updateDistanceUI() {
     const km = Number(avgDistanceEl.value);
-    state.distance_km = km;
+    state.daily_km = km;
     distanceFillEl.style.left = '0';
     distanceFillEl.style.width = (km / Number(avgDistanceEl.max)) * 100 + '%';
     distanceValueEl.textContent = `${km} km/day`;
@@ -287,65 +287,79 @@
   updateFuelSpendUI();
 
   // ---------- V2G expected value calculation (used by both the EV% step and review) ----------
-  // Placeholder market/vehicle assumptions — tune to real figures.
+  // The $ value itself now comes from the backend (POST /calculate); these
+  // stay local only because they drive the "hours free to sell back" narrative,
+  // which the backend doesn't return.
   const VALUE_ASSUMPTIONS = {
-    heavyKwhPerKm: 1.8,        // full-size (heavy duty) bus energy use
-    mediumKwhPerKm: 0.9,       // cutaway (medium duty) bus energy use
-    chargerKw: 40,             // depot charger power rating
-    pricePerKwh: 1.5,          // $ paid per kWh of V2G energy sold back to the grid
-    heavyVehicleCost: 500000,  // incremental EV cost vs. diesel, heavy duty
-    mediumVehicleCost: 150000, // incremental EV cost vs. diesel, medium duty
-    daysPerYear: 365,
+    heavyKwhPerKm: 1.8,   // full-size (heavy duty) bus energy use
+    mediumKwhPerKm: 0.9,  // cutaway (medium duty) bus energy use
+    chargerKw: 40,        // depot charger power rating (matches backend's charger_kw)
   };
 
-  // #EVs = fleetSize * %EVs
-  // powerConsumed = distance * vehicle energy consumption
-  // rechargeTime = powerConsumed / chargerKw
-  // V2G uptime = 24 - operatingHours - rechargeTime
-  // kWhReturned = V2G uptime / 2 * chargerKw
-  // value = days * #EVs * kWhReturned * $/kWh - vehicleCost * #EVs
-  function valueForFleet(count, kwhPerKm, vehicleCost) {
-    const evCount = Math.round(count * (state.pct_ev / 100));
-    if (evCount <= 0) return 0;
-    const operatingHours = state.operating_hours;
-    const powerConsumed = state.distance_km * kwhPerKm;
-    const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
-    const v2gUptime = Math.max(0, 24 - operatingHours - rechargeTime);
-    const kWhReturned = (v2gUptime) * VALUE_ASSUMPTIONS.chargerKw;
-    return VALUE_ASSUMPTIONS.daysPerYear * evCount * kWhReturned * VALUE_ASSUMPTIONS.pricePerKwh;
-    //remove vehicle cost for now
-    //  - vehicleCost * evCount;
+  // backend's vehicle_size is one enum for the whole fleet; pick whichever
+  // duty class has more vehicles as the representative size
+  function dominantVehicleSize() {
+    return state.heavyCount >= state.mediumCount ? 'large' : 'medium';
   }
 
-  // fuel spend avoided is proportional to how much of the fleet goes electric
-  function computeFuelSavings() {
-    return state.annual_fuel_spend * (state.pct_ev / 100);
+  // backend's daily_km is a bucket, not a raw number
+  function dailyKmBucket(km) {
+    if (km < 50) return 'under_50';
+    if (km < 100) return '50_100';
+    if (km < 150) return '100_150';
+    return '150_plus';
   }
 
-  function computeExpectedValue() {
-    return valueForFleet(state.heavyCount, VALUE_ASSUMPTIONS.heavyKwhPerKm, VALUE_ASSUMPTIONS.heavyVehicleCost)
-      + valueForFleet(state.mediumCount, VALUE_ASSUMPTIONS.mediumKwhPerKm, VALUE_ASSUMPTIONS.mediumVehicleCost)
-      + computeFuelSavings();
+  // guards against an in-flight request resolving after a newer one
+  let calcRequestId = 0;
+
+  async function fetchValueCalculation() {
+    const requestId = ++calcRequestId;
+    try {
+      const res = await fetch("http://localhost:8000/calculate", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fleet_size: state.fleet_size,
+          pct_ev: state.pct_ev,
+          vehicle_size: dominantVehicleSize(),
+          daily_km: dailyKmBucket(state.daily_km),
+          operating_hours: state.operating_hours,
+          province: state.province,
+          annual_fuel_spend: state.annual_fuel_spend,
+        }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return requestId === calcRequestId ? data : null;
+    } catch (err) {
+      return null;
+    }
   }
 
   function formatCurrency(amount) {
     return amount.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 });
   }
 
-  // updates any value-callout amount element (by id) with the current expected value
-  function updateValueCallout(amountElId) {
+  function formatCurrencyRange(low, high) {
+    return `${formatCurrency(low)} – ${formatCurrency(high)}`;
+  }
+
+  // updates any value-callout amount element (by id) with a freshly fetched result
+  async function updateValueCallout(amountElId) {
     const amountEl = document.getElementById(amountElId);
+    const result = await fetchValueCalculation();
+    if (!result) return;
     if (!amountEl) return;
-    const expectedValue = computeExpectedValue();
-    amountEl.textContent = formatCurrency(expectedValue);
-    amountEl.classList.toggle('negative', expectedValue < 0);
+    amountEl.textContent = formatCurrencyRange(result.total_benefit_low, result.total_benefit_high);
+    amountEl.classList.toggle('negative', result.total_benefit_low < 0);
   }
 
   // hours a single vehicle of this type has left to sell power back to the
   // grid each day, after its commute and its own recharge are accounted for
   function v2gUptimeHoursFor(kwhPerKm) {
     const operatingHours = Math.max(0, state.operating_hours);
-    const powerConsumed = state.distance_km * kwhPerKm;
+    const powerConsumed = state.daily_km * kwhPerKm;
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     return Math.max(0, 24 - operatingHours - rechargeTime);
   }
@@ -358,13 +372,18 @@
   const evFillEl = document.getElementById('evFill');
   const evValueEl = document.getElementById('evValue');
 
+  // the slider fires 'input' on every drag tick — debounce the network call
+  // so dragging doesn't flood the backend with one request per pixel
+  let evValueDebounceTimer = null;
+
   function updateEvUI() {
     const pct = Number(pct_evEl.value);
     state.pct_ev = pct;
     evFillEl.style.left = '0';
     evFillEl.style.width = pct + '%';
     evValueEl.textContent = `${pct}% electric`;
-    updateValueCallout('evStepValueAmount');
+    clearTimeout(evValueDebounceTimer);
+    evValueDebounceTimer = setTimeout(() => updateValueCallout('evStepValueAmount'), 250);
     syncEvTrucks();
   }
 
@@ -377,8 +396,13 @@
   updateEvUI();
 
   // ---------- step 7: review + submit ----------
-  function renderSummary() {
-    updateValueCallout('valueAmount');
+  async function renderSummary() {
+    const amountEl = document.getElementById('valueAmount');
+    const result = await fetchValueCalculation();
+    if (result && amountEl) {
+      amountEl.textContent = formatCurrencyRange(result.total_benefit_low, result.total_benefit_high);
+      amountEl.classList.toggle('negative', result.total_benefit_low < 0);
+    }
 
     const totalVehicles = state.heavyCount + state.mediumCount;
     const evHeavy = Math.round(state.heavyCount * (state.pct_ev / 100));
@@ -411,16 +435,17 @@
         : `hasn't put any EVs on the road yet — bump up the electrification slider to see the impact.`)
     );
 
-    const fuelSavings = computeFuelSavings();
-
     paragraphs.push(
       totalEVs > 0
-        ? `At <strong>${state.distance_km} km</strong> of driving a day, each EV still has about ` +
-          `<strong>${formatHours(blendedUptime)}</strong> a day free to return power to the grid after its own ` +
-          `recharge — worth an estimated <strong>${formatCurrency(computeExpectedValue())}</strong> a year across your fleet` +
-          (fuelSavings > 0
-            ? `, including <strong>${formatCurrency(fuelSavings)}</strong> in fuel spend avoided by going electric.`
-            : `.`)
+        ? (result
+            ? `At <strong>${state.daily_km} km</strong> of driving a day, each EV still has about ` +
+              `<strong>${formatHours(blendedUptime)}</strong> a day free to return power to the grid after its own ` +
+              `recharge — worth an estimated <strong>${formatCurrencyRange(result.v2g_revenue_low, result.v2g_revenue_high)}</strong> ` +
+              `a year across your fleet` +
+              (result.diesel_savings > 0
+                ? `, including <strong>${formatCurrency(result.diesel_savings)}</strong> in fuel spend avoided by going electric.`
+                : `.`)
+            : `Crunching the numbers on your V2G value…`)
         : `Once some of your fleet goes electric, this is where you'll see how much daily driving distance leaves ` +
           `for selling power back to the grid — and what that's worth over a year.`
     );
@@ -522,15 +547,15 @@
         body: JSON.stringify({
           fleet_size: state.fleet_size,
           pct_ev: state.pct_ev,
-          vehicle_size: state.vehicle_size,
-          daily_km: state.daily_km,
+          vehicle_size: dominantVehicleSize(),
+          daily_km: dailyKmBucket(state.daily_km),
           operating_hours: state.operating_hours,
           province: state.province,
           annual_fuel_spend: state.annual_fuel_spend,
         }),
       });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error((data && data.error) || 'Submission failed');
       statusEl.className = 'submit-status ok';
       statusEl.textContent = `Submitted — reference #${data.id}`;
