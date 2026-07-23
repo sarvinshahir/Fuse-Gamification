@@ -9,26 +9,12 @@
     landOwnership: null,
     leaseRemainingYears: null,
     strataApproval: null,
-    opsStartHour: 7,
-    opsEndHour: 18,
     distance_km: 150,
+    operating_hours = 9,
     pct_ev: 0,
     annual_fuel_spend: 0
   };
 
-  // const response = await fetch("http://localhost:8000/calculate", {
-  //   method: "POST",
-  //   headers: { "Content-Type": "application/json" },
-  //   body: JSON.stringify({
-  //     fleet_size: updatedAnswers.fleet_size,
-  //     pct_ev: updatedAnswers.pct_ev,
-  //     vehicle_size: updatedAnswers.vehicle_size,
-  //     daily_km: updatedAnswers.daily_km,
-  //     operating_hours: updatedAnswers.operating_hours,
-  //     province: updatedAnswers.province,
-  //     annual_fuel_spend: updatedAnswers.annual_fuel_spend,
-  //   }),
-  // });
 
   const TOTAL_STEPS = 9; // steps 0..8
   let currentStep = 0;
@@ -150,6 +136,7 @@
     const heavy = Number(heavyCountEl.value);
     state.mediumCount = medium;
     state.heavyCount = heavy;
+    state.fleet_size = medium + heavy;
 
     mediumFillEl.style.left = '0';
     mediumFillEl.style.width = (medium / Number(mediumCountEl.max)) * 100 + '%';
@@ -242,8 +229,9 @@
       if (document.activeElement === opsStartEl) { s = e - 0.5; opsStartEl.value = s; }
       else { e = s + 0.5; opsEndEl.value = e; }
     }
-    state.opsStartHour = s;
-    state.opsEndHour = e;
+    // state.opsStartHour = s;
+    // state.opsEndHour = e;
+    state.operating_hours = e-s;
     hoursFillEl.style.left = (s / 24) * 100 + '%';
     hoursFillEl.style.width = ((e - s) / 24) * 100 + '%';
     hoursValueEl.textContent = `${formatHour(s)} – ${formatHour(e)}`;
@@ -252,7 +240,7 @@
 
   function syncHoursTrucks() {
     if (currentStep !== 3) return;
-    const fraction = Math.max(0, (state.opsEndHour - state.opsStartHour)) / 24;
+    const fraction = Math.max(0, (state.operating_hours)) / 24;
     //FuseScene.citySetVisibleCount(Math.round(fraction * 12));
   }
 
@@ -319,7 +307,7 @@
   function valueForFleet(count, kwhPerKm, vehicleCost) {
     const evCount = Math.round(count * (state.pct_ev / 100));
     if (evCount <= 0) return 0;
-    const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
+    const operatingHours = state.operating_hours;
     const powerConsumed = state.distance_km * kwhPerKm;
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     const v2gUptime = Math.max(0, 24 - operatingHours - rechargeTime);
@@ -356,7 +344,7 @@
   // hours a single vehicle of this type has left to sell power back to the
   // grid each day, after its commute and its own recharge are accounted for
   function v2gUptimeHoursFor(kwhPerKm) {
-    const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
+    const operatingHours = Math.max(0, state.operating_hours);
     const powerConsumed = state.distance_km * kwhPerKm;
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     return Math.max(0, 24 - operatingHours - rechargeTime);
@@ -397,7 +385,7 @@
     const evMedium = Math.round(state.mediumCount * (state.pct_ev / 100));
     const totalEVs = evHeavy + evMedium;
 
-    const operatingHours = Math.max(0, state.opsEndHour - state.opsStartHour);
+    const operatingHours = Math.max(0, state.operating_hours);
     const hoursAtDepot = Math.max(0, 24 - operatingHours);
 
     const heavyUptime = v2gUptimeHoursFor(VALUE_ASSUMPTIONS.heavyKwhPerKm);
@@ -409,9 +397,8 @@
     const paragraphs = [];
 
     paragraphs.push(
-      `${state.companyName || 'Your fleet'} runs from <strong>${formatHour(state.opsStartHour)}</strong> ` +
-      `to <strong>${formatHour(state.opsEndHour)}</strong> — ${pluralize(Math.round(operatingHours * 10) / 10, 'hour')} ` +
-      `a day. That leaves <strong>${formatHours(hoursAtDepot)}</strong> overnight when every vehicle is parked back ` +
+      `${state.companyName || 'Your fleet'} runs <strong>${formatHour(state.operating_hours)}</strong> ` +
+      `hours a day. That leaves <strong>${formatHours(hoursAtDepot)}</strong> overnight when every vehicle is parked back ` +
       `at the depot — downtime today that V2G turns into paid time.`
     );
 
@@ -481,10 +468,19 @@
     contactSaveStatusEl.className = 'contact-save-status';
     contactSaveStatusEl.textContent = 'Saving…';
     try {
-      const res = await fetch('/api/contact', {
+      // const res = await fetch('/api/contact', {
+      const res = await fetch("http://localhost:8000/contact", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact_name, email, phone: phone || null, submissionId: lastSubmissionId }),
+        // body: JSON.stringify({ contact_name, email, phone: phone || null, submissionId: lastSubmissionId }),
+        body: JSON.stringify({
+          contact_name: contact_name,
+          email: email,
+          phone: phone,
+          contact_name: contact_name,
+          fleet_size: state.fleet_size,
+          ev_count: Math.round(state.fleet_size * state.pct_ev / 100),
+        }),
       });
 
       // await fetch("http://localhost:8000/contact", {
@@ -499,6 +495,8 @@
 
       const data = await res.json();
       if (!res.ok) throw new Error((data && data.error) || 'Could not save your info');
+
+
       contactSaveStatusEl.className = 'contact-save-status ok';
       contactSaveStatusEl.textContent = "Thanks — we'll be in touch!";
     } catch (err) {
@@ -516,12 +514,23 @@
     statusEl.textContent = 'Submitting…';
     let saved = false;
     try {
-      const res = await fetch('/api/submit', {
+      // const res = await fetch('/api/submit', {
+      const res = await fetch("http://localhost:8000/calculate", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
+        // body: JSON.stringify(state),
+        body: JSON.stringify({
+          fleet_size: state.fleet_size,
+          pct_ev: state.pct_ev,
+          vehicle_size: state.vehicle_size,
+          daily_km: state.daily_km,
+          operating_hours: state.operating_hours,
+          province: state.province,
+          annual_fuel_spend: state.annual_fuel_spend,
+        }),
       });
       const data = await res.json();
+      
       if (!res.ok) throw new Error((data && data.error) || 'Submission failed');
       statusEl.className = 'submit-status ok';
       statusEl.textContent = `Submitted — reference #${data.id}`;
