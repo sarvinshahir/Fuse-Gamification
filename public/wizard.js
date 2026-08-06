@@ -15,8 +15,7 @@
     annual_fuel_spend: 0
   };
 
-
-  const TOTAL_STEPS = 9; // steps 0..8
+  const TOTAL_STEPS = 9;
   let currentStep = 0;
 
   FuseScene.init(document.getElementById('scene-canvas'));
@@ -24,7 +23,6 @@
   const stepEls = Array.from(document.querySelectorAll('.step'));
   const progressEl = document.getElementById('progress');
 
-  // ---------- progress dots ----------
   function buildProgress() {
     progressEl.innerHTML = '';
     for (let i = 0; i < TOTAL_STEPS; i++) {
@@ -40,7 +38,6 @@
     });
   }
 
-  // ---------- step transitions ----------
   function goToStep(n) {
     stepEls.forEach(s => s.classList.toggle('active', Number(s.dataset.step) === n));
     currentStep = n;
@@ -50,27 +47,16 @@
 
   function onEnterStep(n) {
     switch (n) {
-      case 0:
-        FuseScene.enterSplash();
-        break;
-      case 1:
-        FuseScene.enterSplash();
-        break;
+      case 0: FuseScene.enterSplash(); break;
+      case 1: FuseScene.enterSplash(); break;
       case 2:
         FuseScene.enterCity();
         FuseScene.hideCity();
         FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
         break;
-      case 3:
-        FuseScene.enterCity();
-        syncHoursTrucks();
-        break;
-      case 4:
-        FuseScene.enterCity();
-        break;
-      case 5:
-        FuseScene.enterCity();
-        break;
+      case 3: FuseScene.enterCity(); syncHoursTrucks(); break;
+      case 4: FuseScene.enterCity(); break;
+      case 5: FuseScene.enterCity(); break;
       case 6:
         FuseScene.enterDepot(true);
         applyDepotState();
@@ -80,13 +66,10 @@
         FuseScene.SetEvFraction(state.pct_ev / 100);
         FuseScene.showPowerlines();
         break;
-      case 8:
-        renderSummary();
-        break;
+      case 8: renderSummary(); break;
     }
   }
 
-  // ---------- nav buttons ----------
   document.querySelectorAll('[data-next]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1);
@@ -102,10 +85,8 @@
     return document.querySelector(`.step[data-step="${step}"] [data-next]`);
   }
 
-  // ---------- step 1: company ----------
-  const companyNameEl = document.getElementById('companyName'); 
+  const companyNameEl = document.getElementById('companyName');
   const locationEl = document.getElementById('location');
-
 
   function validateStep1() {
     const ok = companyNameEl.value.trim().length > 0 && locationEl.value !== '';
@@ -120,10 +101,8 @@
     state.province = locationEl.value;
     validateStep1();
   });
- 
   validateStep1();
 
-  // ---------- step 2: fleet size ----------
   const mediumCountEl = document.getElementById('mediumCount');
   const mediumFillEl = document.getElementById('mediumFill');
   const mediumValueEl = document.getElementById('mediumValue');
@@ -149,8 +128,6 @@
     nextButtonFor(2).disabled = (medium + heavy) === 0;
   }
 
-  // rebuilding the fleet grid is the expensive part, so only do it once the
-  // user releases the slider (native 'change') rather than on every 'input'
   function redrawFleetGrid() {
     FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
     FuseScene.setDepotFleetSize(state.heavyCount + state.mediumCount);
@@ -163,7 +140,6 @@
   updateFleetSizeUI();
   redrawFleetGrid();
 
-  // ---------- step 3: depot ----------
   const depotCheckboxes = document.querySelectorAll('input[name="centralDepot"]');
   const depotSubQuestions = document.getElementById('depotSubQuestions');
   const leaseYearsQuestion = document.getElementById('leaseYearsQuestion');
@@ -202,11 +178,6 @@
     radio.addEventListener('change', () => { state.strataApproval = radio.value === 'yes'; });
   });
 
-  // document.querySelectorAll('input[name="chargerRoom"]').forEach(radio => {
-  //   radio.addEventListener('change', () => { state.chargerRoom = radio.value === 'yes'; });
-  // });
-
-  // ---------- step 4: operating hours ----------
   const opsStartEl = document.getElementById('opsStart');
   const opsEndEl = document.getElementById('opsEnd');
   const hoursFillEl = document.getElementById('hoursFill');
@@ -229,9 +200,7 @@
       if (document.activeElement === opsStartEl) { s = e - 0.5; opsStartEl.value = s; }
       else { e = s + 0.5; opsEndEl.value = e; }
     }
-    // state.opsStartHour = s;
-    // state.opsEndHour = e;
-    state.operating_hours = e-s;
+    state.operating_hours = e - s;
     hoursFillEl.style.left = (s / 24) * 100 + '%';
     hoursFillEl.style.width = ((e - s) / 24) * 100 + '%';
     hoursValueEl.textContent = `${formatHour(s)} – ${formatHour(e)}`;
@@ -241,14 +210,12 @@
   function syncHoursTrucks() {
     if (currentStep !== 3) return;
     const fraction = Math.max(0, (state.operating_hours)) / 24;
-    //FuseScene.citySetVisibleCount(Math.round(fraction * 12));
   }
 
   opsStartEl.addEventListener('input', updateHoursUI);
   opsEndEl.addEventListener('input', updateHoursUI);
   updateHoursUI();
 
-  // ---------- step 4: average daily distance ----------
   const avgDistanceEl = document.getElementById('avgDistance');
   const distanceFillEl = document.getElementById('distanceFill');
   const distanceValueEl = document.getElementById('distanceValue');
@@ -261,8 +228,7 @@
     distanceValueEl.textContent = `${km} km/day`;
   }
 
-  function updateCity(){
-    
+  function updateCity() {
     const km = Number(avgDistanceEl.value);
     FuseScene.setDistanceZoom(km);
     FuseScene.setCityExtent(km);
@@ -271,13 +237,11 @@
   avgDistanceEl.addEventListener('input', updateDistanceUI);
   avgDistanceEl.addEventListener("mouseup", updateCity);
   updateDistanceUI();
-  updateCity()
+  updateCity();
 
-  // ---------- step 5: average annual fuel spend ----------
   const fuelSpendEl = document.getElementById('fuelSpend');
 
   function updateFuelSpendUI() {
-    // strip anything that isn't a digit so only whole numbers can ever land in state
     const digitsOnly = fuelSpendEl.value.replace(/[^\d]/g, '');
     if (digitsOnly !== fuelSpendEl.value) fuelSpendEl.value = digitsOnly;
     state.annual_fuel_spend = digitsOnly === '' ? 0 : Number(digitsOnly);
@@ -286,23 +250,16 @@
   fuelSpendEl.addEventListener('input', updateFuelSpendUI);
   updateFuelSpendUI();
 
-  // ---------- V2G expected value calculation (used by both the EV% step and review) ----------
-  // The $ value itself now comes from the backend (POST /calculate); these
-  // stay local only because they drive the "hours free to sell back" narrative,
-  // which the backend doesn't return.
   const VALUE_ASSUMPTIONS = {
-    heavyKwhPerKm: 1.8,   // full-size (heavy duty) bus energy use
-    mediumKwhPerKm: 0.9,  // cutaway (medium duty) bus energy use
-    chargerKw: 40,        // depot charger power rating (matches backend's charger_kw)
+    heavyKwhPerKm: 1.8,
+    mediumKwhPerKm: 0.9,
+    chargerKw: 40,
   };
 
-  // backend's vehicle_size is one enum for the whole fleet; pick whichever
-  // duty class has more vehicles as the representative size
   function dominantVehicleSize() {
     return state.heavyCount >= state.mediumCount ? 'large' : 'medium';
   }
 
-  // backend's daily_km is a bucket, not a raw number
   function dailyKmBucket(km) {
     if (km < 50) return 'under_50';
     if (km < 100) return '50_100';
@@ -310,7 +267,6 @@
     return '150_plus';
   }
 
-  // guards against an in-flight request resolving after a newer one
   let calcRequestId = 0;
 
   async function fetchValueCalculation() {
@@ -345,7 +301,6 @@
     return `${formatCurrency(low)} – ${formatCurrency(high)}`;
   }
 
-  // updates any value-callout amount element (by id) with a freshly fetched result
   async function updateValueCallout(amountElId) {
     const amountEl = document.getElementById(amountElId);
     const result = await fetchValueCalculation();
@@ -355,8 +310,6 @@
     amountEl.classList.toggle('negative', result.total_benefit_low < 0);
   }
 
-  // hours a single vehicle of this type has left to sell power back to the
-  // grid each day, after its commute and its own recharge are accounted for
   function v2gUptimeHoursFor(kwhPerKm) {
     const operatingHours = Math.max(0, state.operating_hours);
     const powerConsumed = state.daily_km * kwhPerKm;
@@ -367,13 +320,10 @@
   function pluralize(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
   function formatHours(h) { return `${(Math.round(h * 10) / 10)} hour${Math.round(h * 10) === 10 ? '' : 's'}`; }
 
-  // ---------- step 6: EV percentage ----------
   const pct_evEl = document.getElementById('evPercent');
   const evFillEl = document.getElementById('evFill');
   const evValueEl = document.getElementById('evValue');
 
-  // the slider fires 'input' on every drag tick — debounce the network call
-  // so dragging doesn't flood the backend with one request per pixel
   let evValueDebounceTimer = null;
 
   function updateEvUI() {
@@ -395,7 +345,6 @@
   pct_evEl.addEventListener('input', updateEvUI);
   updateEvUI();
 
-  // ---------- step 7: review + submit ----------
   async function renderSummary() {
     const amountEl = document.getElementById('valueAmount');
     const result = await fetchValueCalculation();
@@ -460,7 +409,6 @@
     setTimeout(() => toastEl.classList.remove('show'), 2400);
   }
 
-  // ---------- post-submit contact modal ----------
   const contactModalEl = document.getElementById('contactModal');
   let lastSubmissionId = null;
 
@@ -471,9 +419,6 @@
     if (e.target === contactModalEl) contactModalEl.classList.remove('show');
   });
 
-  // Captures a lead's own contact info (separate from the fleet scorecard
-  // submission above) so Fuse can follow up. Keyed on email so that once
-  // account login exists, this same record can become their account.
   const contactNameEl = document.getElementById('contactName');
   const contactEmailEl = document.getElementById('contactEmail');
   const contactPhoneEl = document.getElementById('contactPhone');
@@ -493,35 +438,22 @@
     contactSaveStatusEl.className = 'contact-save-status';
     contactSaveStatusEl.textContent = 'Saving…';
     try {
-      // const res = await fetch('/api/contact', {
       const res = await fetch("http://localhost:8000/contact", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // body: JSON.stringify({ contact_name, email, phone: phone || null, submissionId: lastSubmissionId }),
         body: JSON.stringify({
+          submission_id: lastSubmissionId || 0,
           contact_name: contact_name,
+          company_name: state.companyName,
           email: email,
           phone: phone,
-          contact_name: contact_name,
           fleet_size: state.fleet_size,
           ev_count: Math.round(state.fleet_size * state.pct_ev / 100),
         }),
       });
 
-      // await fetch("http://localhost:8000/contact", {
-      //         method: "POST",
-      //         headers: { "Content-Type": "application/json" },
-      //         body: JSON.stringify({
-      //           ...contact,
-      //           fleet_size: answers.fleet_size,
-      //           ev_count: Math.round(answers.fleet_size * answers.pct_ev / 100),
-      //         }),
-      //       });
-
       const data = await res.json();
       if (!res.ok) throw new Error((data && data.error) || 'Could not save your info');
-
-
       contactSaveStatusEl.className = 'contact-save-status ok';
       contactSaveStatusEl.textContent = "Thanks — we'll be in touch!";
     } catch (err) {
@@ -539,11 +471,9 @@
     statusEl.textContent = 'Submitting…';
     let saved = false;
     try {
-      // const res = await fetch('/api/submit', {
-      const res = await fetch("http://localhost:8000/calculate", {
+      const res = await fetch("http://localhost:8000/submit", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // body: JSON.stringify(state),
         body: JSON.stringify({
           fleet_size: state.fleet_size,
           pct_ev: state.pct_ev,
@@ -555,24 +485,20 @@
         }),
       });
       const data = await res.json();
-
       if (!res.ok) throw new Error((data && data.error) || 'Submission failed');
       statusEl.className = 'submit-status ok';
-      statusEl.textContent = `Submitted — reference #${data.id}`;
-      lastSubmissionId = data.id;
+      statusEl.textContent = `Submitted — reference #${data.submission_id}`;
+      lastSubmissionId = data.submission_id;
       saved = true;
     } catch (err) {
       statusEl.className = 'submit-status err';
       statusEl.textContent = err.message;
       btn.disabled = false;
     }
-    // show the toast + contact modal either way — a backend hiccup shouldn't
-    // block the user from seeing the value prop / how to get in touch
     showToast(saved ? 'Saved to database' : "Couldn't save, but here's how to reach us");
     contactModalEl.classList.add('show');
   });
 
-  // ---------- init ----------
   buildProgress();
   goToStep(0);
 })();
