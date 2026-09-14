@@ -272,7 +272,7 @@
   async function fetchValueCalculation() {
     const requestId = ++calcRequestId;
     try {
-      const res = await fetch("http://localhost:8000/calculate", {
+      const res = await fetch("http://localhost:8001/calculate", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -438,7 +438,7 @@
     contactSaveStatusEl.className = 'contact-save-status';
     contactSaveStatusEl.textContent = 'Saving…';
     try {
-      const res = await fetch("http://localhost:8000/contact", {
+      const res = await fetch("http://localhost:8001/contact", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -471,7 +471,7 @@
     statusEl.textContent = 'Submitting…';
     let saved = false;
     try {
-      const res = await fetch("http://localhost:8000/submit", {
+      const res = await fetch("http://localhost:8001/submit", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
