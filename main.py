@@ -3,6 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import sqlite3
+import os
+
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
 
 app = FastAPI()
 
@@ -15,21 +23,19 @@ app.add_middleware(
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-BATTERY_SIZE_KWH = 255          # kWh — confirmed in meeting (school bus Phase 1)
-MIN_SOC = 0.20                  # 20% minimum state of charge
+BATTERY_SIZE_KWH = 255
+MIN_SOC = 0.20
 USABLE_BATTERY_KWH = BATTERY_SIZE_KWH * (1 - MIN_SOC)  # 204 kWh
-CHARGER_KW = 40                 # kW — Tellus Power, confirmed from Lynch
+CHARGER_KW = 40
 V2G_WINDOW_HOURS = 4.0          # 5pm–9pm
-ANNUAL_DAYS = 350               # days/year — confirmed in meeting
+ANNUAL_DAYS = 350
 
-ENERGY_PER_KM = 1.3             # kWh/km — TODO validate with Lynch Excel from Rob
+ENERGY_PER_KM = 1.3             # TODO validate with Lynch Excel from Rob
 
-# TODO: both values below need validation before using in business case
-DIESEL_L_PER_KM = 0.40          # L/km — school bus estimate, unconfirmed
-DIESEL_PRICE_PER_L = 2.30       # $/L — BC average, unconfirmed
+DIESEL_L_PER_KM = 0.40          # TODO validate with Rob
+DIESEL_PRICE_PER_L = 2.30       # TODO validate — BC average
 
-# Provisional — V2G compensation methodology not yet confirmed with Rob/Bryan
-PROVISIONAL_V2G_RATE = 0.12     # $/kWh — placeholder only
+PROVISIONAL_V2G_RATE = 0.12     # $/kWh — placeholder, methodology not confirmed
 
 UTILITY_RATES = {
     "BC": 0.12,
@@ -46,65 +52,120 @@ BATTERY_MAP = {
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 def get_db():
-    conn = sqlite3.connect("gamification.db")
-    conn.row_factory = sqlite3.Row
+    if DATABASE_URL and psycopg2:
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    else:
+        conn = sqlite3.connect("gamification.db")
+        conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     conn = get_db()
     c = conn.cursor()
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            status TEXT DEFAULT 'incomplete',
-            last_completed_step INTEGER DEFAULT 0,
-            company_name TEXT,
-            province TEXT,
-            fleet_size INTEGER,
-            vehicle_size TEXT,
-            daily_km REAL,
-            morning_start REAL,
-            morning_end REAL,
-            afternoon_start REAL,
-            afternoon_end REAL,
-            available_5_9pm INTEGER,
-            midday_available INTEGER,
-            other_available_times TEXT,
-            central_depot INTEGER,
-            available_energy_at_5pm_kwh REAL,
-            full_recharge_time_hrs REAL,
-            v2g_kwh_per_bus_per_day REAL,
-            annual_v2g_energy_kwh REAL,
-            v2g_revenue_low REAL,
-            v2g_revenue_high REAL,
-            annual_diesel_cost REAL,
-            annual_electricity_cost REAL,
-            net_fuel_savings REAL,
-            total_benefit_low REAL,
-            total_benefit_high REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS contacts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            submission_id INTEGER REFERENCES submissions(id),
-            company_name TEXT,
-            contact_name TEXT,
-            email TEXT,
-            phone TEXT,
-            fleet_size INTEGER,
-            depot_location TEXT,
-            best_time TEXT,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    if DATABASE_URL and psycopg2:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS submissions (
+                id SERIAL PRIMARY KEY,
+                session_id TEXT,
+                status TEXT DEFAULT 'incomplete',
+                last_completed_step INTEGER DEFAULT 0,
+                company_name TEXT,
+                province TEXT,
+                fleet_size INTEGER,
+                vehicle_size TEXT,
+                daily_km REAL,
+                morning_start REAL,
+                morning_end REAL,
+                afternoon_start REAL,
+                afternoon_end REAL,
+                available_5_9pm INTEGER,
+                midday_available INTEGER,
+                other_available_times TEXT,
+                central_depot INTEGER,
+                available_energy_at_5pm_kwh REAL,
+                full_recharge_time_hrs REAL,
+                v2g_kwh_per_bus_per_day REAL,
+                annual_v2g_energy_kwh REAL,
+                v2g_revenue_low REAL,
+                v2g_revenue_high REAL,
+                annual_diesel_cost REAL,
+                annual_electricity_cost REAL,
+                net_fuel_savings REAL,
+                total_benefit_low REAL,
+                total_benefit_high REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS contacts (
+                id SERIAL PRIMARY KEY,
+                submission_id INTEGER REFERENCES submissions(id),
+                company_name TEXT,
+                contact_name TEXT,
+                email TEXT,
+                phone TEXT,
+                fleet_size INTEGER,
+                depot_location TEXT,
+                best_time TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    else:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT,
+                status TEXT DEFAULT 'incomplete',
+                last_completed_step INTEGER DEFAULT 0,
+                company_name TEXT,
+                province TEXT,
+                fleet_size INTEGER,
+                vehicle_size TEXT,
+                daily_km REAL,
+                morning_start REAL,
+                morning_end REAL,
+                afternoon_start REAL,
+                afternoon_end REAL,
+                available_5_9pm INTEGER,
+                midday_available INTEGER,
+                other_available_times TEXT,
+                central_depot INTEGER,
+                available_energy_at_5pm_kwh REAL,
+                full_recharge_time_hrs REAL,
+                v2g_kwh_per_bus_per_day REAL,
+                annual_v2g_energy_kwh REAL,
+                v2g_revenue_low REAL,
+                v2g_revenue_high REAL,
+                annual_diesel_cost REAL,
+                annual_electricity_cost REAL,
+                net_fuel_savings REAL,
+                total_benefit_low REAL,
+                total_benefit_high REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submission_id INTEGER REFERENCES submissions(id),
+                company_name TEXT,
+                contact_name TEXT,
+                email TEXT,
+                phone TEXT,
+                fleet_size INTEGER,
+                depot_location TEXT,
+                best_time TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
     conn.commit()
     conn.close()
@@ -160,7 +221,6 @@ class ContactInfo(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def optional_bool_to_int(val: Optional[bool]) -> Optional[int]:
-    """True→1, False→0, None→None (unanswered stays NULL)"""
     if val is None:
         return None
     return int(val)
@@ -170,55 +230,41 @@ def optional_bool_to_int(val: Optional[bool]) -> Optional[int]:
 def calculate_v2g_revenue(data: SurveyInput):
 
     battery_size = BATTERY_MAP.get(data.vehicle_size, 255)
-    usable_battery = battery_size * (1 - MIN_SOC)  # e.g. 255 × 0.8 = 204 kWh
+    usable_battery = battery_size * (1 - MIN_SOC)
     electricity_rate = UTILITY_RATES.get(data.province, 0.12)
 
     # 1. Fleet potential — assume 100% become EV
     num_evs = data.fleet_size
 
     # 2. Energy consumed on routes
-    # NOTE: 50/50 morning/afternoon split is a working assumption
-    # TODO: validate with Lynch route spreadsheet Rob mentioned
+    # TODO: validate 50/50 split with Lynch route spreadsheet
     morning_energy = (data.daily_km / 2) * ENERGY_PER_KM
     afternoon_energy = (data.daily_km / 2) * ENERGY_PER_KM
     total_energy_per_day = morning_energy + afternoon_energy
 
     # 3. SOC sequence through the day
-    # Bus starts fully charged (204 kWh usable)
     energy_after_morning = usable_battery - morning_energy
-
-    # Midday recharge: if available, bus recharges to full before afternoon
     energy_before_afternoon = usable_battery if data.midday_available else energy_after_morning
-
-    # SOC arriving at 5pm (in kWh, not percentage)
     available_energy_at_5pm_kwh = max(0.0, energy_before_afternoon - afternoon_energy)
 
-    # 4. Recharge times — two separate concepts
-    # Full recharge (20% → 100%): the reference number from Slide 4 / meeting note
-    full_recharge_time_hrs = usable_battery / CHARGER_KW  # 204 / 40 = 5.1 hours
-
-    # Driving recovery recharge: how long to recover just what driving consumed
-    # Useful for operations planning but not shown on Slide 4
+    # 4. Recharge times
+    full_recharge_time_hrs = usable_battery / CHARGER_KW  # 204/40 = 5.1 hrs
     driving_recovery_hrs = (usable_battery - available_energy_at_5pm_kwh) / CHARGER_KW
 
-    # 5. V2G energy available in 5–9pm window
-    # Constrained by charger power × 4 hours, and actual energy available at 5pm
+    # 5. V2G energy in 5–9pm window
     if data.available_5_9pm:
         v2g_kwh_per_bus = min(
-            V2G_WINDOW_HOURS * CHARGER_KW,   # 160 kWh physical max
-            available_energy_at_5pm_kwh       # what's actually in battery at 5pm
+            V2G_WINDOW_HOURS * CHARGER_KW,
+            available_energy_at_5pm_kwh
         )
     else:
         v2g_kwh_per_bus = 0.0
 
     # 6. Annual V2G energy potential
     annual_v2g_energy_kwh = num_evs * v2g_kwh_per_bus * ANNUAL_DAYS
-
-    # Provisional revenue — compensation methodology not confirmed
     annual_v2g_revenue = annual_v2g_energy_kwh * PROVISIONAL_V2G_RATE
 
-    # 7. Fuel savings — calculated not asked
-    # TODO: validate DIESEL_L_PER_KM and DIESEL_PRICE_PER_L with Rob
+    # 7. Fuel savings
     annual_diesel_cost = (
         data.fleet_size * data.daily_km *
         DIESEL_L_PER_KM * DIESEL_PRICE_PER_L * ANNUAL_DAYS
@@ -229,7 +275,7 @@ def calculate_v2g_revenue(data: SurveyInput):
     )
     net_fuel_savings = max(0, annual_diesel_cost - annual_electricity_cost)
 
-    # 8. Total benefit ±30% range
+    # 8. Total benefit ±30%
     total_benefit = annual_v2g_revenue + net_fuel_savings
 
     return {
@@ -267,30 +313,32 @@ def save_step(data: PartialSubmission):
     midday_available = optional_bool_to_int(data.midday_available)
     central_depot = optional_bool_to_int(data.central_depot)
 
+    ph = "%s" if (DATABASE_URL and psycopg2) else "?"
+
     existing = c.execute(
-        "SELECT id FROM submissions WHERE session_id = ?",
+        f"SELECT id FROM submissions WHERE session_id = {ph}",
         (data.session_id,)
     ).fetchone()
 
     if existing:
-        c.execute("""
+        c.execute(f"""
             UPDATE submissions SET
-                last_completed_step = ?,
-                company_name = COALESCE(?, company_name),
-                province = COALESCE(?, province),
-                fleet_size = COALESCE(?, fleet_size),
-                vehicle_size = COALESCE(?, vehicle_size),
-                daily_km = COALESCE(?, daily_km),
-                morning_start = COALESCE(?, morning_start),
-                morning_end = COALESCE(?, morning_end),
-                afternoon_start = COALESCE(?, afternoon_start),
-                afternoon_end = COALESCE(?, afternoon_end),
-                available_5_9pm = CASE WHEN ? IS NOT NULL THEN ? ELSE available_5_9pm END,
-                midday_available = CASE WHEN ? IS NOT NULL THEN ? ELSE midday_available END,
-                other_available_times = COALESCE(?, other_available_times),
-                central_depot = CASE WHEN ? IS NOT NULL THEN ? ELSE central_depot END,
+                last_completed_step = {ph},
+                company_name = COALESCE({ph}, company_name),
+                province = COALESCE({ph}, province),
+                fleet_size = COALESCE({ph}, fleet_size),
+                vehicle_size = COALESCE({ph}, vehicle_size),
+                daily_km = COALESCE({ph}, daily_km),
+                morning_start = COALESCE({ph}, morning_start),
+                morning_end = COALESCE({ph}, morning_end),
+                afternoon_start = COALESCE({ph}, afternoon_start),
+                afternoon_end = COALESCE({ph}, afternoon_end),
+                available_5_9pm = CASE WHEN {ph} IS NOT NULL THEN {ph} ELSE available_5_9pm END,
+                midday_available = CASE WHEN {ph} IS NOT NULL THEN {ph} ELSE midday_available END,
+                other_available_times = COALESCE({ph}, other_available_times),
+                central_depot = CASE WHEN {ph} IS NOT NULL THEN {ph} ELSE central_depot END,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE session_id = ?
+            WHERE session_id = {ph}
         """, (
             data.step,
             data.company_name, data.province, data.fleet_size,
@@ -305,23 +353,43 @@ def save_step(data: PartialSubmission):
         ))
         submission_id = existing["id"]
     else:
-        c.execute("""
-            INSERT INTO submissions (
-                session_id, status, last_completed_step,
-                company_name, province, fleet_size, vehicle_size, daily_km,
-                morning_start, morning_end, afternoon_start, afternoon_end,
-                available_5_9pm, midday_available, other_available_times, central_depot
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (
-            data.session_id, 'incomplete', data.step,
-            data.company_name, data.province, data.fleet_size,
-            data.vehicle_size, data.daily_km,
-            data.morning_start, data.morning_end,
-            data.afternoon_start, data.afternoon_end,
-            available_5_9pm, midday_available,
-            data.other_available_times, central_depot
-        ))
-        submission_id = c.lastrowid
+        if DATABASE_URL and psycopg2:
+            c.execute("""
+                INSERT INTO submissions (
+                    session_id, status, last_completed_step,
+                    company_name, province, fleet_size, vehicle_size, daily_km,
+                    morning_start, morning_end, afternoon_start, afternoon_end,
+                    available_5_9pm, midday_available, other_available_times, central_depot
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                data.session_id, 'incomplete', data.step,
+                data.company_name, data.province, data.fleet_size,
+                data.vehicle_size, data.daily_km,
+                data.morning_start, data.morning_end,
+                data.afternoon_start, data.afternoon_end,
+                available_5_9pm, midday_available,
+                data.other_available_times, central_depot
+            ))
+            submission_id = c.fetchone()["id"]
+        else:
+            c.execute("""
+                INSERT INTO submissions (
+                    session_id, status, last_completed_step,
+                    company_name, province, fleet_size, vehicle_size, daily_km,
+                    morning_start, morning_end, afternoon_start, afternoon_end,
+                    available_5_9pm, midday_available, other_available_times, central_depot
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                data.session_id, 'incomplete', data.step,
+                data.company_name, data.province, data.fleet_size,
+                data.vehicle_size, data.daily_km,
+                data.morning_start, data.morning_end,
+                data.afternoon_start, data.afternoon_end,
+                available_5_9pm, midday_available,
+                data.other_available_times, central_depot
+            ))
+            submission_id = c.lastrowid
 
     conn.commit()
     conn.close()
@@ -337,30 +405,32 @@ def submit(data: SurveyInput):
     conn = get_db()
     c = conn.cursor()
 
-    # Harden: create row if /save-step was never called
+    ph = "%s" if (DATABASE_URL and psycopg2) else "?"
+
     existing = c.execute(
-        "SELECT id FROM submissions WHERE session_id = ?",
+        f"SELECT id FROM submissions WHERE session_id = {ph}",
         (data.session_id,)
     ).fetchone()
 
     if existing:
-        c.execute("""
+        c.execute(f"""
             UPDATE submissions SET
-                status = 'completed',
-                available_energy_at_5pm_kwh = ?,
-                full_recharge_time_hrs = ?,
-                v2g_kwh_per_bus_per_day = ?,
-                annual_v2g_energy_kwh = ?,
-                v2g_revenue_low = ?,
-                v2g_revenue_high = ?,
-                annual_diesel_cost = ?,
-                annual_electricity_cost = ?,
-                net_fuel_savings = ?,
-                total_benefit_low = ?,
-                total_benefit_high = ?,
+                status = {ph},
+                available_energy_at_5pm_kwh = {ph},
+                full_recharge_time_hrs = {ph},
+                v2g_kwh_per_bus_per_day = {ph},
+                annual_v2g_energy_kwh = {ph},
+                v2g_revenue_low = {ph},
+                v2g_revenue_high = {ph},
+                annual_diesel_cost = {ph},
+                annual_electricity_cost = {ph},
+                net_fuel_savings = {ph},
+                total_benefit_low = {ph},
+                total_benefit_high = {ph},
                 updated_at = CURRENT_TIMESTAMP
-            WHERE session_id = ?
+            WHERE session_id = {ph}
         """, (
+            'completed',
             result["available_energy_at_5pm_kwh"],
             result["full_recharge_time_hrs"],
             result["v2g_kwh_per_bus_per_day"],
@@ -376,32 +446,59 @@ def submit(data: SurveyInput):
         ))
         submission_id = existing["id"]
     else:
-        # Fallback: create the row if save-step was never called
-        c.execute("""
-            INSERT INTO submissions (
-                session_id, status, last_completed_step,
-                fleet_size, vehicle_size, daily_km, province,
-                available_5_9pm, midday_available, central_depot,
-                available_energy_at_5pm_kwh, full_recharge_time_hrs,
-                v2g_kwh_per_bus_per_day, annual_v2g_energy_kwh,
-                v2g_revenue_low, v2g_revenue_high,
-                annual_diesel_cost, annual_electricity_cost,
-                net_fuel_savings, total_benefit_low, total_benefit_high
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """, (
-            data.session_id, 'completed', 99,
-            data.fleet_size, data.vehicle_size, data.daily_km, data.province,
-            int(data.available_5_9pm), int(data.midday_available), int(data.central_depot),
-            result["available_energy_at_5pm_kwh"],
-            result["full_recharge_time_hrs"],
-            result["v2g_kwh_per_bus_per_day"],
-            result["annual_v2g_energy_kwh"],
-            result["v2g_revenue_low"], result["v2g_revenue_high"],
-            result["annual_diesel_cost"], result["annual_electricity_cost"],
-            result["net_fuel_savings"],
-            result["total_benefit_low"], result["total_benefit_high"]
-        ))
-        submission_id = c.lastrowid
+        if DATABASE_URL and psycopg2:
+            c.execute("""
+                INSERT INTO submissions (
+                    session_id, status, last_completed_step,
+                    fleet_size, vehicle_size, daily_km, province,
+                    available_5_9pm, midday_available, central_depot,
+                    available_energy_at_5pm_kwh, full_recharge_time_hrs,
+                    v2g_kwh_per_bus_per_day, annual_v2g_energy_kwh,
+                    v2g_revenue_low, v2g_revenue_high,
+                    annual_diesel_cost, annual_electricity_cost,
+                    net_fuel_savings, total_benefit_low, total_benefit_high
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                data.session_id, 'completed', 99,
+                data.fleet_size, data.vehicle_size, data.daily_km, data.province,
+                int(data.available_5_9pm), int(data.midday_available), int(data.central_depot),
+                result["available_energy_at_5pm_kwh"],
+                result["full_recharge_time_hrs"],
+                result["v2g_kwh_per_bus_per_day"],
+                result["annual_v2g_energy_kwh"],
+                result["v2g_revenue_low"], result["v2g_revenue_high"],
+                result["annual_diesel_cost"], result["annual_electricity_cost"],
+                result["net_fuel_savings"],
+                result["total_benefit_low"], result["total_benefit_high"]
+            ))
+            submission_id = c.fetchone()["id"]
+        else:
+            c.execute("""
+                INSERT INTO submissions (
+                    session_id, status, last_completed_step,
+                    fleet_size, vehicle_size, daily_km, province,
+                    available_5_9pm, midday_available, central_depot,
+                    available_energy_at_5pm_kwh, full_recharge_time_hrs,
+                    v2g_kwh_per_bus_per_day, annual_v2g_energy_kwh,
+                    v2g_revenue_low, v2g_revenue_high,
+                    annual_diesel_cost, annual_electricity_cost,
+                    net_fuel_savings, total_benefit_low, total_benefit_high
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                data.session_id, 'completed', 99,
+                data.fleet_size, data.vehicle_size, data.daily_km, data.province,
+                int(data.available_5_9pm), int(data.midday_available), int(data.central_depot),
+                result["available_energy_at_5pm_kwh"],
+                result["full_recharge_time_hrs"],
+                result["v2g_kwh_per_bus_per_day"],
+                result["annual_v2g_energy_kwh"],
+                result["v2g_revenue_low"], result["v2g_revenue_high"],
+                result["annual_diesel_cost"], result["annual_electricity_cost"],
+                result["net_fuel_savings"],
+                result["total_benefit_low"], result["total_benefit_high"]
+            ))
+            submission_id = c.lastrowid
 
     conn.commit()
     conn.close()
@@ -414,11 +511,14 @@ def save_contact(data: ContactInfo):
     resolved_name = data.contact_name or data.name
     conn = get_db()
     c = conn.cursor()
-    c.execute("""
+
+    ph = "%s" if (DATABASE_URL and psycopg2) else "?"
+
+    c.execute(f"""
         INSERT INTO contacts (
             submission_id, company_name, contact_name, email, phone,
             fleet_size, depot_location, best_time, notes
-        ) VALUES (?,?,?,?,?,?,?,?,?)
+        ) VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
     """, (
         data.submission_id, data.company_name, resolved_name,
         data.email, data.phone, data.fleet_size,
