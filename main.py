@@ -535,6 +535,11 @@ def save_contact(data: ContactInfo):
 def test_page():
     return FileResponse("test.html")
 
+
+@app.get("/survey")
+def survey_page():
+    return FileResponse("sarvin-frontend/index.html")
+
 @app.get("/")
 def root():
     return {"message": "Fuse Gamification API is running"}

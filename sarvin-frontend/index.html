@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fuse V2G Fleet Calculator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1f3d;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 680px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    .header {
+      background: #1B4F8A;
+      padding: 28px 32px;
+      color: white;
+    }
+    .header .logo { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin-bottom: 6px; }
+    .header p { font-size: 14px; opacity: 0.8; }
+
+    .progress-bar { height: 4px; background: #e0e0e0; }
+    .progress-fill { height: 100%; background: #00BFA5; transition: width 0.4s ease; }
+    .progress-text {
+      padding: 12px 32px;
+      font-size: 12px;
+      color: #999;
+      background: #f9f9f9;
+      border-bottom: 1px solid #eee;
+    }
+
+    .step { display: none; padding: 36px 32px; }
+    .step.active { display: block; }
+
+    .step-title { font-size: 22px; font-weight: 700; color: #1B4F8A; margin-bottom: 8px; }
+    .step-subtitle { font-size: 14px; color: #888; margin-bottom: 28px; }
+
+    label { display: block; font-size: 14px; font-weight: 600; color: #444; margin-bottom: 8px; }
+
+    select, input[type="number"], input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-bottom: 20px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    select:focus, input:focus { border-color: #1B4F8A; }
+
+    .radio-group { display: flex; gap: 12px; margin-bottom: 20px; }
+    .radio-btn {
+      flex: 1;
+      padding: 14px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+      transition: all 0.2s;
+    }
+    .radio-btn:hover { border-color: #1B4F8A; color: #1B4F8A; }
+    .radio-btn.selected { border-color: #1B4F8A; background: #1B4F8A; color: white; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .btn-row { display: flex; gap: 12px; margin-top: 8px; }
+    .btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #1B4F8A; color: white; }
+    .btn-primary:hover { background: #154070; }
+    .btn-secondary { background: #f0f0f0; color: #555; }
+    .btn-secondary:hover { background: #e0e0e0; }
+    .btn-full { width: 100%; }
+    .btn-green { background: #2E7D32; color: white; }
+    .btn-green:hover { background: #1B5E20; }
+
+    .error-msg { color: #e53935; font-size: 13px; margin-top: -12px; margin-bottom: 12px; }
+
+    .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .result-card { background: #f4f8ff; border-radius: 12px; padding: 20px; text-align: center; }
+    .result-card .r-label { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .result-card .r-value { font-size: 22px; font-weight: 800; color: #1B4F8A; }
+    .result-card.green { background: #f0faf0; }
+    .result-card.green .r-value { color: #2E7D32; }
+    .result-card.orange { background: #fff8f0; }
+    .result-card.orange .r-value { color: #E65100; }
+    .result-card.full { grid-column: span 2; }
+
+    .disclaimer { font-size: 11px; color: #aaa; text-align: center; margin-top: 16px; font-style: italic; }
+
+    .saved-badge {
+      background: #e8f5e9;
+      color: #2E7D32;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .saved-badge.show { display: flex; }
+
+    .splash { text-align: center; padding: 48px 32px; }
+    .splash h1 { font-size: 28px; color: #1B4F8A; margin-bottom: 12px; font-weight: 800; }
+    .splash p { font-size: 15px; color: #666; margin-bottom: 32px; line-height: 1.6; }
+    .splash .stat { font-size: 13px; color: #888; margin-top: 24px; }
+
+    .thankyou { text-align: center; padding: 48px 32px; }
+    .thankyou .check { font-size: 56px; margin-bottom: 16px; }
+    .thankyou h2 { color: #2E7D32; font-size: 26px; margin-bottom: 12px; }
+    .thankyou p { color: #666; font-size: 15px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="logo">FUSE</div>
+    <p>V2G Fleet Revenue Calculator</p>
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+  <div class="progress-text" id="progressText">Get started below</div>
+
+  <!-- Step 0: Splash -->
+  <div class="step active" id="step-0">
+    <div class="splash">
+      <h1>Your parked buses could be earning money</h1>
+      <p>Answer 8 quick questions about your fleet and we'll estimate how much annual revenue your buses could generate through Vehicle-to-Grid technology — while also showing your fuel savings from going electric.</p>
+      <button class="btn btn-primary btn-full" onclick="nextStep()">Start My Estimate →</button>
+      <p class="stat">Takes about 3 minutes</p>
+    </div>
+  </div>
+
+  <!-- Step 1: Company + Province -->
+  <div class="step" id="step-1">
+    <div class="step-title">Tell us about your company</div>
+    <div class="step-subtitle">This helps us apply the right utility rates for your region</div>
+
+    <label>Company name</label>
+    <input type="text" id="company_name" placeholder="e.g. Lynch Bus Lines">
+
+    <label>Province</label>
+    <select id="province">
+      <option value="">Select your province...</option>
+      <option value="BC">British Columbia</option>
+      <option value="ON">Ontario</option>
+      <option value="QC">Québec</option>
+      <option value="NS">Nova Scotia</option>
+    </select>
+
+    <div class="error-msg" id="err-1"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Fleet size -->
+  <div class="step" id="step-2">
+    <div class="step-title">How many buses do you operate?</div>
+    <div class="step-subtitle">Include all buses — we'll assume all eventually go electric</div>
+
+    <label>Total fleet size</label>
+    <input type="number" id="fleet_size" placeholder="e.g. 25" min="1">
+
+    <label>Bus size</label>
+    <select id="vehicle_size">
+      <option value="">Select bus size...</option>
+      <option value="small">Small — Microbird G5 (~175 kWh battery)</option>
+      <option value="medium">Medium — Lion C / Lion D (~255 kWh battery)</option>
+      <option value="large">Large — Blue Bird Vision / All American (~255 kWh battery)</option>
+    </select>
+
+    <div class="error-msg" id="err-2"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Daily km -->
+  <div class="step" id="step-3">
+    <div class="step-title">How far does each bus travel daily?</div>
+    <div class="step-subtitle">Total kilometres per bus per day — not per trip</div>
+
+    <label>Average daily km per bus</label>
+    <input type="number" id="daily_km" placeholder="e.g. 80" min="1" max="500">
+
+    <div class="error-msg" id="err-3"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Morning schedule -->
+  <div class="step" id="step-4">
+    <div class="step-title">What are your morning route hours?</div>
+    <div class="step-subtitle">Enter in 24-hour format (e.g. 7 = 7am, 9 = 9am)</div>
+
+    <div class="two-col">
+      <div>
+        <label>Morning start</label>
+        <input type="number" id="morning_start" placeholder="e.g. 7" min="4" max="12" step="0.5">
+      </div>
+      <div>
+        <label>Morning end</label>
+        <input type="number" id="morning_end" placeholder="e.g. 9" min="6" max="14" step="0.5">
+      </div>
+    </div>
+
+    <div class="error-msg" id="err-4"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 5: Afternoon schedule -->
+  <div class="step" id="step-5">
+    <div class="step-title">What are your afternoon route hours?</div>
+    <div class="step-subtitle">The earlier buses return, the more time available for V2G from 5–9pm</div>
+
+    <div class="two-col">
+      <div>
+        <label>Afternoon start</label>
+        <input type="number" id="afternoon_start" placeholder="e.g. 14" min="10" max="18" step="0.5">
+      </div>
+      <div>
+        <label>Afternoon end</label>
+        <input type="number" id="afternoon_end" placeholder="e.g. 16.5" min="12" max="20" step="0.5">
+      </div>
+    </div>
+
+    <div class="error-msg" id="err-5"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 6: Availability -->
+  <div class="step" id="step-6">
+    <div class="step-title">Fleet availability for V2G</div>
+    <div class="step-subtitle">The 5–9pm window is when utilities need power most</div>
+
+    <label>Are buses back at depot and available from 5pm to 9pm?</label>
+    <div class="radio-group" id="rg-available_5_9pm">
+      <div class="radio-btn" onclick="selectRadio('available_5_9pm', true, this)">✅ Yes</div>
+      <div class="radio-btn" onclick="selectRadio('available_5_9pm', false, this)">❌ No</div>
+    </div>
+
+    <label>Can buses recharge midday between routes?</label>
+    <div class="radio-group" id="rg-midday_available">
+      <div class="radio-btn" onclick="selectRadio('midday_available', true, this)">✅ Yes</div>
+      <div class="radio-btn" onclick="selectRadio('midday_available', false, this)">❌ No</div>
+    </div>
+
+    <label>Do you have a central depot?</label>
+    <div class="radio-group" id="rg-central_depot">
+      <div class="radio-btn" onclick="selectRadio('central_depot', true, this)">✅ Yes</div>
+      <div class="radio-btn" onclick="selectRadio('central_depot', false, this)">❌ No</div>
+    </div>
+
+    <div class="error-msg" id="err-6"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-primary" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 7: Results -->
+  <div class="step" id="step-7">
+    <div class="step-title">Your V2G Revenue Estimate</div>
+    <div class="step-subtitle">Based on your fleet profile — all numbers are provisional estimates</div>
+
+    <div class="saved-badge" id="savedBadge">✅ Your results have been saved</div>
+
+    <div class="results-grid">
+      <div class="result-card green full">
+        <div class="r-label">Annual V2G Revenue Potential</div>
+        <div class="r-value" id="res-v2g">Calculating...</div>
+      </div>
+      <div class="result-card full" style="background:#f4f8ff">
+        <div class="r-label">Annual Fuel Savings (diesel → electric)</div>
+        <div class="r-value" id="res-fuel" style="color:#1B4F8A">Calculating...</div>
+      </div>
+      <div class="result-card orange full">
+        <div class="r-label">Total Annual Benefit</div>
+        <div class="r-value" id="res-total">Calculating...</div>
+      </div>
+      <div class="result-card">
+        <div class="r-label">Battery at 5pm per bus</div>
+        <div class="r-value" id="res-battery" style="font-size:18px">—</div>
+      </div>
+      <div class="result-card">
+        <div class="r-label">Full recharge time</div>
+        <div class="r-value" id="res-recharge" style="font-size:18px">—</div>
+      </div>
+      <div class="result-card">
+        <div class="r-label">V2G energy per bus/day</div>
+        <div class="r-value" id="res-kwh" style="font-size:18px">—</div>
+      </div>
+      <div class="result-card">
+        <div class="r-label">Annual V2G energy</div>
+        <div class="r-value" id="res-energy" style="font-size:18px">—</div>
+      </div>
+    </div>
+
+    <p class="disclaimer">⚠️ V2G compensation methodology and utility rates are subject to confirmation. Diesel price and consumption figures require validation. Results shown as ±30% range.</p>
+
+    <div class="btn-row" style="margin-top:24px">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-green" onclick="nextStep()">Secure My Place →</button>
+    </div>
+  </div>
+
+  <!-- Step 8: Contact -->
+  <div class="step" id="step-8">
+    <div class="step-title">Hold your place in the program</div>
+    <div class="step-subtitle">A Fuse advisor will be in touch to review your fleet and next steps</div>
+
+    <label>Your name</label>
+    <input type="text" id="contact_name" placeholder="Full name">
+
+    <label>Email address</label>
+    <input type="email" id="contact_email" placeholder="you@company.com">
+
+    <label>Phone (optional)</label>
+    <input type="text" id="contact_phone" placeholder="(604) 555-0000">
+
+    <label>Best time to reach you (optional)</label>
+    <input type="text" id="contact_best_time" placeholder="e.g. Mornings, or after 3pm">
+
+    <div class="error-msg" id="err-8"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+      <button class="btn btn-green" onclick="submitContact()">Secure My Contribution Eligibility</button>
+    </div>
+  </div>
+
+  <!-- Step 9: Thank you -->
+  <div class="step" id="step-9">
+    <div class="thankyou">
+      <div class="check">✅</div>
+      <h2>You're on the list!</h2>
+      <p>Thank you for your interest in the Fuse V2G Fleet Program. A member of our team will be in touch shortly to review your fleet profile and outline next steps.</p>
+      <p style="margin-top:16px; color:#999; font-size:13px;">This does not commit you to any agreement.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = "https://fuse-gamification.onrender.com";
+  const SESSION_ID = "web-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9);
+
+  let currentStep = 0;
+  const TOTAL_STEPS = 9;
+  const radioState = {};
+  let submissionId = null;
+
+  function updateProgress() {
+    const pct = (currentStep / (TOTAL_STEPS - 1)) * 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+    if (currentStep === 0) {
+      document.getElementById('progressText').textContent = 'Get started below';
+    } else if (currentStep >= TOTAL_STEPS - 1) {
+      document.getElementById('progressText').textContent = 'Complete!';
+    } else {
+      document.getElementById('progressText').textContent = `Step ${currentStep} of ${TOTAL_STEPS - 2}`;
+    }
+  }
+
+  function showStep(n) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step-' + n).classList.add('active');
+    currentStep = n;
+    updateProgress();
+    window.scrollTo(0, 0);
+  }
+
+  function selectRadio(name, value, el) {
+    radioState[name] = value;
+    const group = document.getElementById('rg-' + name);
+    group.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function validate(step) {
+    const errEl = document.getElementById('err-' + step);
+    if (errEl) errEl.textContent = '';
+
+    if (step === 1) {
+      if (!document.getElementById('company_name').value.trim()) {
+        errEl.textContent = 'Please enter your company name.'; return false;
+      }
+      if (!document.getElementById('province').value) {
+        errEl.textContent = 'Please select your province.'; return false;
+      }
+    }
+    if (step === 2) {
+      if (!document.getElementById('fleet_size').value) {
+        errEl.textContent = 'Please enter your fleet size.'; return false;
+      }
+      if (!document.getElementById('vehicle_size').value) {
+        errEl.textContent = 'Please select your bus size.'; return false;
+      }
+    }
+    if (step === 3) {
+      if (!document.getElementById('daily_km').value) {
+        errEl.textContent = 'Please enter daily km.'; return false;
+      }
+    }
+    if (step === 4) {
+      const s = document.getElementById('morning_start').value;
+      const e = document.getElementById('morning_end').value;
+      if (!s || !e) { errEl.textContent = 'Please enter morning start and end times.'; return false; }
+      if (parseFloat(e) <= parseFloat(s)) { errEl.textContent = 'End time must be after start time.'; return false; }
+    }
+    if (step === 5) {
+      const s = document.getElementById('afternoon_start').value;
+      const e = document.getElementById('afternoon_end').value;
+      if (!s || !e) { errEl.textContent = 'Please enter afternoon start and end times.'; return false; }
+      if (parseFloat(e) <= parseFloat(s)) { errEl.textContent = 'End time must be after start time.'; return false; }
+    }
+    if (step === 6) {
+      if (radioState['available_5_9pm'] === undefined) { errEl.textContent = 'Please answer all questions.'; return false; }
+      if (radioState['midday_available'] === undefined) { errEl.textContent = 'Please answer all questions.'; return false; }
+      if (radioState['central_depot'] === undefined) { errEl.textContent = 'Please answer all questions.'; return false; }
+    }
+    return true;
+  }
+
+  async function saveStep(step) {
+    const payload = { session_id: SESSION_ID, step: step };
+    if (step >= 1) {
+      payload.company_name = document.getElementById('company_name').value.trim();
+      payload.province = document.getElementById('province').value;
+    }
+    if (step >= 2) {
+      payload.fleet_size = parseInt(document.getElementById('fleet_size').value) || null;
+      payload.vehicle_size = document.getElementById('vehicle_size').value || null;
+    }
+    if (step >= 3) {
+      payload.daily_km = parseFloat(document.getElementById('daily_km').value) || null;
+    }
+    if (step >= 4) {
+      payload.morning_start = parseFloat(document.getElementById('morning_start').value) || null;
+      payload.morning_end = parseFloat(document.getElementById('morning_end').value) || null;
+    }
+    if (step >= 5) {
+      payload.afternoon_start = parseFloat(document.getElementById('afternoon_start').value) || null;
+      payload.afternoon_end = parseFloat(document.getElementById('afternoon_end').value) || null;
+    }
+    if (step >= 6) {
+      if (radioState['available_5_9pm'] !== undefined) payload.available_5_9pm = radioState['available_5_9pm'];
+      if (radioState['midday_available'] !== undefined) payload.midday_available = radioState['midday_available'];
+      if (radioState['central_depot'] !== undefined) payload.central_depot = radioState['central_depot'];
+    }
+    try {
+      const res = await fetch(API + "/save-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.submission_id) submissionId = data.submission_id;
+    } catch(e) {
+      console.log("Save step failed:", e);
+    }
+  }
+
+  async function calculateAndShow() {
+    const payload = {
+      session_id: SESSION_ID,
+      fleet_size: parseInt(document.getElementById('fleet_size').value),
+      vehicle_size: document.getElementById('vehicle_size').value,
+      daily_km: parseFloat(document.getElementById('daily_km').value),
+      morning_start: parseFloat(document.getElementById('morning_start').value),
+      morning_end: parseFloat(document.getElementById('morning_end').value),
+      afternoon_start: parseFloat(document.getElementById('afternoon_start').value),
+      afternoon_end: parseFloat(document.getElementById('afternoon_end').value),
+      available_5_9pm: radioState['available_5_9pm'],
+      midday_available: radioState['midday_available'],
+      province: document.getElementById('province').value,
+      central_depot: radioState['central_depot']
+    };
+
+    try {
+      const res = await fetch(API + "/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.submission_id) submissionId = data.submission_id;
+
+      const fmt = (low, high) => "$" + low.toLocaleString() + " – $" + high.toLocaleString();
+
+      document.getElementById('res-v2g').textContent = fmt(data.v2g_revenue_low, data.v2g_revenue_high);
+      document.getElementById('res-fuel').textContent = "$" + data.net_fuel_savings.toLocaleString();
+      document.getElementById('res-total').textContent = fmt(data.total_benefit_low, data.total_benefit_high);
+      document.getElementById('res-battery').textContent = data.available_energy_at_5pm_kwh + " kWh";
+      document.getElementById('res-recharge').textContent = data.full_recharge_time_hrs + " hrs";
+      document.getElementById('res-kwh').textContent = data.v2g_kwh_per_bus_per_day + " kWh";
+      document.getElementById('res-energy').textContent = data.annual_v2g_energy_kwh.toLocaleString() + " kWh";
+
+      document.getElementById('savedBadge').classList.add('show');
+    } catch(e) {
+      console.log("Calculate failed:", e);
+    }
+  }
+
+  async function nextStep() {
+    if (!validate(currentStep)) return;
+    await saveStep(currentStep);
+    const next = currentStep + 1;
+    if (next === 7) {
+      showStep(7);
+      await calculateAndShow();
+    } else {
+      showStep(next);
+    }
+  }
+
+  function prevStep() {
+    if (currentStep > 0) showStep(currentStep - 1);
+  }
+
+  async function submitContact() {
+    const name = document.getElementById('contact_name').value.trim();
+    const email = document.getElementById('contact_email').value.trim();
+    const errEl = document.getElementById('err-8');
+    if (!name) { errEl.textContent = 'Please enter your name.'; return; }
+    if (!email) { errEl.textContent = 'Please enter your email.'; return; }
+    try {
+      await fetch(API + "/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submission_id: submissionId || 0,
+          company_name: document.getElementById('company_name').value.trim(),
+          contact_name: name,
+          email: email,
+          phone: document.getElementById('contact_phone').value.trim(),
+          fleet_size: parseInt(document.getElementById('fleet_size').value) || 0,
+          best_time: document.getElementById('contact_best_time').value.trim(),
+          notes: ""
+        })
+      });
+      showStep(9);
+    } catch(e) {
+      errEl.textContent = 'Could not save your info. Please try again.';
+    }
+  }
+
+  updateProgress();
+</script>
+
+</body>
+</html>
