@@ -214,7 +214,7 @@
   <!-- Step 3: Daily km -->
   <div class="step" id="step-3">
     <div class="step-title">How far does each bus travel daily?</div>
-    <div class="step-subtitle">Total kilometres per bus per day — not per trip</div>
+    <div class="step-subtitle">Total kilometres per bus per day — both routes combined. Typical school bus: 60–120 km/day.</div>
 
     <label>Average daily km per bus</label>
     <input type="number" id="daily_km" placeholder="e.g. 80" min="1" max="500">
@@ -229,16 +229,38 @@
   <!-- Step 4: Morning schedule -->
   <div class="step" id="step-4">
     <div class="step-title">What are your morning route hours?</div>
-    <div class="step-subtitle">Enter in 24-hour format (e.g. 7 = 7am, 9 = 9am)</div>
+    <div class="step-subtitle">When do buses leave and return from the morning run?</div>
 
     <div class="two-col">
       <div>
         <label>Morning start</label>
-        <input type="number" id="morning_start" placeholder="e.g. 7" min="4" max="12" step="0.5">
+        <select id="morning_start">
+          <option value="">Select...</option>
+          <option value="5">5:00 AM</option>
+          <option value="5.5">5:30 AM</option>
+          <option value="6">6:00 AM</option>
+          <option value="6.5">6:30 AM</option>
+          <option value="7">7:00 AM</option>
+          <option value="7.5">7:30 AM</option>
+          <option value="8">8:00 AM</option>
+          <option value="8.5">8:30 AM</option>
+          <option value="9">9:00 AM</option>
+        </select>
       </div>
       <div>
         <label>Morning end</label>
-        <input type="number" id="morning_end" placeholder="e.g. 9" min="6" max="14" step="0.5">
+        <select id="morning_end">
+          <option value="">Select...</option>
+          <option value="7">7:00 AM</option>
+          <option value="7.5">7:30 AM</option>
+          <option value="8">8:00 AM</option>
+          <option value="8.5">8:30 AM</option>
+          <option value="9">9:00 AM</option>
+          <option value="9.5">9:30 AM</option>
+          <option value="10">10:00 AM</option>
+          <option value="10.5">10:30 AM</option>
+          <option value="11">11:00 AM</option>
+        </select>
       </div>
     </div>
 
@@ -257,11 +279,37 @@
     <div class="two-col">
       <div>
         <label>Afternoon start</label>
-        <input type="number" id="afternoon_start" placeholder="e.g. 14" min="10" max="18" step="0.5">
+        <select id="afternoon_start">
+          <option value="">Select...</option>
+          <option value="12">12:00 PM</option>
+          <option value="12.5">12:30 PM</option>
+          <option value="13">1:00 PM</option>
+          <option value="13.5">1:30 PM</option>
+          <option value="14">2:00 PM</option>
+          <option value="14.5">2:30 PM</option>
+          <option value="15">3:00 PM</option>
+          <option value="15.5">3:30 PM</option>
+          <option value="16">4:00 PM</option>
+          <option value="16.5">4:30 PM</option>
+          <option value="17">5:00 PM</option>
+        </select>
       </div>
       <div>
         <label>Afternoon end</label>
-        <input type="number" id="afternoon_end" placeholder="e.g. 16.5" min="12" max="20" step="0.5">
+        <select id="afternoon_end">
+          <option value="">Select...</option>
+          <option value="13">1:00 PM</option>
+          <option value="13.5">1:30 PM</option>
+          <option value="14">2:00 PM</option>
+          <option value="14.5">2:30 PM</option>
+          <option value="15">3:00 PM</option>
+          <option value="15.5">3:30 PM</option>
+          <option value="16">4:00 PM</option>
+          <option value="16.5">4:30 PM</option>
+          <option value="17">5:00 PM</option>
+          <option value="17.5">5:30 PM</option>
+          <option value="18">6:00 PM</option>
+        </select>
       </div>
     </div>
 
@@ -448,13 +496,13 @@
     if (step === 4) {
       const s = document.getElementById('morning_start').value;
       const e = document.getElementById('morning_end').value;
-      if (!s || !e) { errEl.textContent = 'Please enter morning start and end times.'; return false; }
+      if (!s || !e) { errEl.textContent = 'Please select morning start and end times.'; return false; }
       if (parseFloat(e) <= parseFloat(s)) { errEl.textContent = 'End time must be after start time.'; return false; }
     }
     if (step === 5) {
       const s = document.getElementById('afternoon_start').value;
       const e = document.getElementById('afternoon_end').value;
-      if (!s || !e) { errEl.textContent = 'Please enter afternoon start and end times.'; return false; }
+      if (!s || !e) { errEl.textContent = 'Please select afternoon start and end times.'; return false; }
       if (parseFloat(e) <= parseFloat(s)) { errEl.textContent = 'End time must be after start time.'; return false; }
     }
     if (step === 6) {
@@ -512,8 +560,12 @@
       daily_km: parseFloat(document.getElementById('daily_km').value),
       morning_start: parseFloat(document.getElementById('morning_start').value),
       morning_end: parseFloat(document.getElementById('morning_end').value),
-      afternoon_start: parseFloat(document.getElementById('afternoon_start').value),
-      afternoon_end: parseFloat(document.getElementById('afternoon_end').value),
+      afternoon_start: document.getElementById('afternoon_start').value
+        ? parseFloat(document.getElementById('afternoon_start').value)
+        : null,
+      afternoon_end: document.getElementById('afternoon_end').value
+        ? parseFloat(document.getElementById('afternoon_end').value)
+        : null,
       available_5_9pm: radioState['available_5_9pm'],
       midday_available: radioState['midday_available'],
       province: document.getElementById('province').value,
