@@ -55,9 +55,12 @@ BATTERY_MAP = {
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    if DATABASE_URL and psycopg2:
+    if DATABASE_URL:
+        if psycopg2 is None:
+            raise RuntimeError("DATABASE_URL is set but psycopg2 is unavailable — check requirements.txt")
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     else:
+        # Local development only
         conn = sqlite3.connect("gamification.db")
         conn.row_factory = sqlite3.Row
     return conn
