@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fuse V2G API Test</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 20px; }
+    button { background: #1B4F8A; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-bottom: 10px; }
+    pre { background: #f4f6f9; padding: 20px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+    h3 { color: #1B4F8A; }
+  </style>
+</head>
+<body>
+  <h2>Fuse V2G API Test</h2>
+  <p>Tests your live Render backend with a sample fleet.</p>
+
+  <h3>Test /calculate</h3>
+  <button onclick="testCalculate()">Run Calculate</button>
+
+  <h3>Test /save-step</h3>
+  <button onclick="testSaveStep()">Run Save Step</button>
+
+  <h3>Test /submit</h3>
+  <button onclick="testSubmit()">Run Submit</button>
+
+  <pre id="result">Click a button to test...</pre>
+
+  <script>
+    const API = "https://fuse-gamification.onrender.com";
+
+    const payload = {
+      session_id: "test-" + Date.now(),
+      fleet_size: 10,
+      vehicle_size: "medium",
+      daily_km: 75,
+      morning_start: 7,
+      morning_end: 9,
+      afternoon_start: 14,
+      afternoon_end: 16.5,
+      available_5_9pm: true,
+      midday_available: false,
+      province: "BC",
+      central_depot: true
+    };
+
+    async function post(endpoint, data) {
+      document.getElementById('result').textContent = 'Loading...';
+      try {
+        const res = await fetch(API + endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        const json = await res.json();
+        document.getElementById('result').textContent = JSON.stringify(json, null, 2);
+      } catch(err) {
+        document.getElementById('result').textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function testCalculate() {
+      post("/calculate", payload);
+    }
+
+    function testSaveStep() {
+      post("/save-step", {
+        session_id: payload.session_id,
+        step: 1,
+        company_name: "Test Bus Co",
+        province: "BC",
+        fleet_size: 10
+      });
+    }
+
+    function testSubmit() {
+      post("/submit", payload);
+    }
+  </script>
+</body>
+</html>

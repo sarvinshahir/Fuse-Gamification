@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 import sqlite3
@@ -60,7 +61,6 @@ def get_db():
             raise RuntimeError("DATABASE_URL is set but psycopg2 is unavailable — check requirements.txt")
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     else:
-        # Local development only
         conn = sqlite3.connect("gamification.db")
         conn.row_factory = sqlite3.Row
     return conn
@@ -530,6 +530,10 @@ def save_contact(data: ContactInfo):
     conn.commit()
     conn.close()
     return {"message": "Contact saved successfully"}
+
+@app.get("/test")
+def test_page():
+    return FileResponse("test.html")
 
 @app.get("/")
 def root():
