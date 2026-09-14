@@ -318,10 +318,12 @@ def save_step(data: PartialSubmission):
 
     ph = "%s" if (DATABASE_URL and psycopg2) else "?"
 
-    existing = c.execute(
+    # ── FIXED: separate execute and fetchone ──
+    c.execute(
         f"SELECT id FROM submissions WHERE session_id = {ph}",
         (data.session_id,)
-    ).fetchone()
+    )
+    existing = c.fetchone()
 
     if existing:
         c.execute(f"""
@@ -410,10 +412,12 @@ def submit(data: SurveyInput):
 
     ph = "%s" if (DATABASE_URL and psycopg2) else "?"
 
-    existing = c.execute(
+    # ── FIXED: separate execute and fetchone ──
+    c.execute(
         f"SELECT id FROM submissions WHERE session_id = {ph}",
         (data.session_id,)
-    ).fetchone()
+    )
+    existing = c.fetchone()
 
     if existing:
         c.execute(f"""
@@ -531,14 +535,13 @@ def save_contact(data: ContactInfo):
     conn.close()
     return {"message": "Contact saved successfully"}
 
-@app.get("/test")
-def test_page():
-    return FileResponse("test.html")
-
-
 @app.get("/survey")
 def survey_page():
     return FileResponse("sarvin-frontend/index.html")
+
+@app.get("/test")
+def test_page():
+    return FileResponse("test.html")
 
 @app.get("/")
 def root():
