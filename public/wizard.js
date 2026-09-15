@@ -1,24 +1,37 @@
 (function () {
+  function getOrCreateSessionId() {
+    const key = 'fuseSessionId';
+    let id = sessionStorage.getItem(key);
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      sessionStorage.setItem(key, id);
+    }
+    return id;
+  }
+
   const state = {
+    session_id: getOrCreateSessionId(),
     companyName: '',
     province: '',
-    typeACount: 0,
-    typeBCount: 0,
-    typeCCount: 0,
-    typeDCount: 0,
+    smallCount: 0,
+    largeCount: 0,
     fleet_size: 0,
     centralDepot: null,
+    depotEvening: null,
     landOwnership: null,
     leaseRemainingYears: null,
     // strataApproval: null,
     daily_km: 150,
-    operating_hours: 9,
+    morning_start: 7,
+    morning_end: 9,
+    afternoon_start: 14,
+    afternoon_end: 16.5,
     electrification_interest: 5,
     pct_ev: 0,
     annual_fuel_spend: 0
   };
 
-  const TOTAL_STEPS = 9;
+  const TOTAL_STEPS = 8;
   let currentStep = 0;
 
   FuseScene.init(document.getElementById('scene-canvas'));
@@ -46,6 +59,33 @@
     currentStep = n;
     updateProgress();
     onEnterStep(n);
+    saveStepProgress();
+  }
+
+  async function saveStepProgress() {
+    try {
+      await fetch("http://localhost:8000/save-step", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: state.session_id,
+          step: currentStep,
+          company_name: state.companyName || null,
+          province: state.province || null,
+          small_count: state.smallCount,
+          standard_count: state.largeCount,
+          daily_km: state.daily_km,
+          morning_start: state.morning_start,
+          morning_end: state.morning_end,
+          afternoon_start: state.afternoon_start,
+          afternoon_end: state.afternoon_end,
+          available_5_9pm: state.depotEvening,
+          central_depot: state.centralDepot,
+        }),
+      });
+    } catch (err) {
+      // best-effort save; don't block navigation on network errors
+    }
   }
 
   function onEnterStep(n) {
@@ -66,14 +106,10 @@
         FuseScene.hidePowerlines();
         break;
       case 6:
-        FuseScene.enterDepot(true);
-        FuseScene.hidePowerlines();
-        break;
-      case 7:
         FuseScene.SetEvFraction(state.pct_ev / 100);
         FuseScene.showPowerlines();
         break;
-      case 8: renderSummary(); break;
+      case 7: renderSummary(); break;
     }
   }
 
@@ -110,51 +146,40 @@
   });
   validateStep1();
 
-  const BUS_TYPES = ['A', 'B', 'C', 'D'];
-  const DOM_BUS_TYPES = ['C', 'D'];
-  const busTypeEls = {};
-  DOM_BUS_TYPES.forEach(type => {
-    busTypeEls[type] = {
-      count: document.getElementById(`type${type}Count`),
-      fill: document.getElementById(`type${type}Fill`),
-      value: document.getElementById(`type${type}Value`),
-    };
-  });
+  const BUS_TYPES = ['small', 'large'];
 
-  const typeABEl = document.getElementById('typeABCount');
-  const typeABFillEl = document.getElementById('typeABFill');
-  const typeABValueEl = document.getElementById('typeABValue');
+  const typeSmallEl = document.getElementById('typeSmallCount');
+  const typeSmallFillEl = document.getElementById('typeSmallFill');
+  const typeSmallValueEl = document.getElementById('typeSmallValue');
+
+  const typeLargeEl = document.getElementById('typeLargeCount');
+  const typeLargeFillEl = document.getElementById('typeLargeFill');
+  const typeLargeValueEl = document.getElementById('typeLargeValue');
 
   function fleetCounts() {
     return {
-      A: state.typeACount,
-      B: state.typeBCount,
-      C: state.typeCCount,
-      D: state.typeDCount,
+      small: state.smallCount,
+      large: state.largeCount,
     };
   }
 
   function updateFleetSizeUI() {
     let total = 0;
 
-    const abCount = Number(typeABEl.value);
-    state.typeACount = Math.ceil(abCount / 2);
-    state.typeBCount = Math.floor(abCount / 2);
-    total += abCount;
-    typeABFillEl.style.left = '0';
-    typeABFillEl.style.width = (abCount / Number(typeABEl.max)) * 100 + '%';
-    typeABValueEl.textContent = `${abCount} vehicle${abCount === 1 ? '' : 's'}`;
+    const smallCount = Number(typeSmallEl.value);
+    state.smallCount = smallCount;
+    total += smallCount;
+    typeSmallFillEl.style.left = '0';
+    typeSmallFillEl.style.width = (smallCount / Number(typeSmallEl.max)) * 100 + '%';
+    typeSmallValueEl.textContent = `${smallCount} vehicle${smallCount === 1 ? '' : 's'}`;
 
-    DOM_BUS_TYPES.forEach(type => {
-      const els = busTypeEls[type];
-      const count = Number(els.count.value);
-      state[`type${type}Count`] = count;
-      total += count;
+    const largeCount = Number(typeLargeEl.value);
+    state.largeCount = largeCount;
+    total += largeCount;
+    typeLargeFillEl.style.left = '0';
+    typeLargeFillEl.style.width = (largeCount / Number(typeLargeEl.max)) * 100 + '%';
+    typeLargeValueEl.textContent = `${largeCount} vehicle${largeCount === 1 ? '' : 's'}`;
 
-      els.fill.style.left = '0';
-      els.fill.style.width = (count / Number(els.count.max)) * 100 + '%';
-      els.value.textContent = `${count} vehicle${count === 1 ? '' : 's'}`;
-    });
     state.fleet_size = total;
 
     nextButtonFor(2).disabled = total === 0;
@@ -166,17 +191,15 @@
     FuseScene.setDepotFleetSize(state.fleet_size);
   }
 
-  typeABEl.addEventListener('input', updateFleetSizeUI);
-  typeABEl.addEventListener('mouseup', redrawFleetGrid);
-  DOM_BUS_TYPES.forEach(type => {
-    const els = busTypeEls[type];
-    els.count.addEventListener('input', updateFleetSizeUI);
-    els.count.addEventListener('mouseup', redrawFleetGrid);
-  });
+  typeSmallEl.addEventListener('input', updateFleetSizeUI);
+  typeSmallEl.addEventListener('mouseup', redrawFleetGrid);
+  typeLargeEl.addEventListener('input', updateFleetSizeUI);
+  typeLargeEl.addEventListener('mouseup', redrawFleetGrid);
   updateFleetSizeUI();
   redrawFleetGrid();
 
   const depotCheckboxes = document.querySelectorAll('input[name="centralDepot"]');
+  const depotEveningCheckboxes = document.querySelectorAll('input[name="depotEvening"]');
   const depotSubQuestions = document.getElementById('depotSubQuestions');
   const leaseYearsQuestion = document.getElementById('leaseYearsQuestion');
 
@@ -193,10 +216,23 @@
     });
   });
 
+  depotEveningCheckboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        depotEveningCheckboxes.forEach(other => { if (other !== cb) other.checked = false; });
+        state.depotEvening = cb.value === 'yes';
+      } else {
+        const anyChecked = Array.from(depotEveningCheckboxes).some(c => c.checked);
+        if (!anyChecked) state.depotEvening = null;
+      }
+      applyDepotState();
+    });
+  });
+
   function applyDepotState() {
-    const hasSelection = state.centralDepot !== null;
+    const hasSelection = state.centralDepot !== null && state.depotEvening !== null;
     nextButtonFor(5).disabled = !hasSelection;
-    depotSubQuestions.classList.toggle('open', hasSelection);
+    depotSubQuestions.classList.toggle('open', state.centralDepot !== null);
   }
 
   document.querySelectorAll('input[name="landOwnership"]').forEach(radio => {
@@ -214,10 +250,15 @@
   //   radio.addEventListener('change', () => { state.strataApproval = radio.value === 'yes'; });
   // });
 
-  const opsStartEl = document.getElementById('opsStart');
-  const opsEndEl = document.getElementById('opsEnd');
-  const hoursFillEl = document.getElementById('hoursFill');
-  const hoursValueEl = document.getElementById('hoursValue');
+  const opsStartAMEl = document.getElementById('opsStartAM');
+  const opsEndAMEl = document.getElementById('opsEndAM');
+  const hoursFillAMEl = document.getElementById('hoursFillAM');
+  const hoursValueAMEl = document.getElementById('hoursValueAM');
+
+  const opsStartPMEl = document.getElementById('opsStartPM');
+  const opsEndPMEl = document.getElementById('opsEndPM');
+  const hoursFillPMEl = document.getElementById('hoursFillPM');
+  const hoursValuePMEl = document.getElementById('hoursValuePM');
 
   function formatHour(h) {
     h = ((h % 24) + 24) % 24;
@@ -229,27 +270,42 @@
     return `${displayH}:${String(mm).padStart(2, '0')}${period}`;
   }
 
-  function updateHoursUI() {
-    let s = parseFloat(opsStartEl.value);
-    let e = parseFloat(opsEndEl.value);
+  function updateRouteRangeUI(startEl, endEl, fillEl, valueEl) {
+    let s = parseFloat(startEl.value);
+    let e = parseFloat(endEl.value);
     if (s > e - 0.5) {
-      if (document.activeElement === opsStartEl) { s = e - 0.5; opsStartEl.value = s; }
-      else { e = s + 0.5; opsEndEl.value = e; }
+      if (document.activeElement === startEl) { s = e - 0.5; startEl.value = s; }
+      else { e = s + 0.5; endEl.value = e; }
     }
-    state.operating_hours = e - s;
-    hoursFillEl.style.left = (s / 24) * 100 + '%';
-    hoursFillEl.style.width = ((e - s) / 24) * 100 + '%';
-    hoursValueEl.textContent = `${formatHour(s)} – ${formatHour(e)}`;
+    fillEl.style.left = (s / 24) * 100 + '%';
+    fillEl.style.width = ((e - s) / 24) * 100 + '%';
+    valueEl.textContent = `${formatHour(s)} – ${formatHour(e)}`;
+    return e - s;
+  }
+
+  function updateHoursUI() {
+    updateRouteRangeUI(opsStartAMEl, opsEndAMEl, hoursFillAMEl, hoursValueAMEl);
+    updateRouteRangeUI(opsStartPMEl, opsEndPMEl, hoursFillPMEl, hoursValuePMEl);
+    state.morning_start = parseFloat(opsStartAMEl.value);
+    state.morning_end = parseFloat(opsEndAMEl.value);
+    state.afternoon_start = parseFloat(opsStartPMEl.value);
+    state.afternoon_end = parseFloat(opsEndPMEl.value);
     syncHoursTrucks();
+  }
+
+  function totalOperatingHours() {
+    return (state.morning_end - state.morning_start) + (state.afternoon_end - state.afternoon_start);
   }
 
   function syncHoursTrucks() {
     if (currentStep !== 3) return;
-    const fraction = Math.max(0, (state.operating_hours)) / 24;
+    const fraction = Math.max(0, totalOperatingHours()) / 24;
   }
 
-  opsStartEl.addEventListener('input', updateHoursUI);
-  opsEndEl.addEventListener('input', updateHoursUI);
+  opsStartAMEl.addEventListener('input', updateHoursUI);
+  opsEndAMEl.addEventListener('input', updateHoursUI);
+  opsStartPMEl.addEventListener('input', updateHoursUI);
+  opsEndPMEl.addEventListener('input', updateHoursUI);
   updateHoursUI();
 
   const avgDistanceEl = document.getElementById('avgDistance');
@@ -274,15 +330,6 @@
   avgDistanceEl.addEventListener("mouseup", updateCity);
   updateDistanceUI();
   updateCity();
-
-  const fuelSpendEl = document.getElementById('fuelSpend');
-
-  function updateFuelSpendUI() {
-    const digitsOnly = fuelSpendEl.value.replace(/[^\d]/g, '');
-    if (digitsOnly !== fuelSpendEl.value) fuelSpendEl.value = digitsOnly;
-    state.annual_fuel_spend = digitsOnly === '' ? 0 : Number(digitsOnly);
-    updateFuelSavingsCallout();
-  }
 
   function updateFuelSavingsCallout() {
     const totalSpend = state.annual_fuel_spend * state.fleet_size;
@@ -309,30 +356,13 @@
     }
   }
 
-  fuelSpendEl.addEventListener('input', updateFuelSpendUI);
-  updateFuelSpendUI();
+  updateFuelSavingsCallout();
 
   const VALUE_ASSUMPTIONS = {
-    typeAKwhPerKm: 0.6,
-    typeBKwhPerKm: 0.9,
-    typeCKwhPerKm: 1.4,
-    typeDKwhPerKm: 1.8,
+    smallKwhPerKm: 0.75,
+    largeKwhPerKm: 1.6,
     chargerKw: 40,
   };
-
-  // Picks the type with the most vehicles; ties favor the larger type (D > C > B > A).
-  function dominantVehicleSize() {
-    return BUS_TYPES.reduce((best, type) =>
-      state[`type${type}Count`] >= state[`type${best}Count`] ? type : best
-    );
-  }
-
-  function dailyKmBucket(km) {
-    if (km < 50) return 'under_50';
-    if (km < 100) return '50_100';
-    if (km < 150) return '100_150';
-    return '150_plus';
-  }
 
   let calcRequestId = 0;
 
@@ -343,13 +373,17 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fleet_size: state.fleet_size,
-          pct_ev: state.pct_ev,
-          vehicle_size: dominantVehicleSize(),
-          daily_km: dailyKmBucket(state.daily_km),
-          operating_hours: state.operating_hours,
+          session_id: state.session_id,
+          small_count: state.smallCount,
+          standard_count: state.largeCount,
+          daily_km: state.daily_km,
+          morning_start: state.morning_start,
+          morning_end: state.morning_end,
+          afternoon_start: state.afternoon_start,
+          afternoon_end: state.afternoon_end,
+          available_5_9pm: !!state.depotEvening,
+          central_depot: !!state.centralDepot,
           province: state.province,
-          annual_fuel_spend: state.annual_fuel_spend,
         }),
       });
       if (!res.ok) return null;
@@ -369,7 +403,7 @@
   }
 
   function v2gUptimeHoursFor(kwhPerKm) {
-    const operatingHours = Math.max(0, state.operating_hours);
+    const operatingHours = Math.max(0, totalOperatingHours());
     const powerConsumed = state.daily_km * kwhPerKm;
     const rechargeTime = powerConsumed / VALUE_ASSUMPTIONS.chargerKw;
     return Math.max(0, 24 - operatingHours - rechargeTime);
@@ -397,7 +431,7 @@
   }
 
   function syncEvTrucks() {
-    if (currentStep !== 7) return;
+    if (currentStep !== 6) return;
     FuseScene.SetEvFraction(state.pct_ev / 100);
   }
 
@@ -419,17 +453,17 @@
     const evCounts = {};
     let totalEVs = 0;
     BUS_TYPES.forEach(type => {
-      const evCount = Math.round(state[`type${type}Count`] * (state.pct_ev / 100));
+      const evCount = Math.round(state[`${type}Count`] * (state.pct_ev / 100));
       evCounts[type] = evCount;
       totalEVs += evCount;
     });
 
-    const operatingHours = Math.max(0, state.operating_hours);
+    const operatingHours = Math.max(0, totalOperatingHours());
     const hoursAtDepot = Math.max(0, 24 - operatingHours);
 
     const uptimeByType = {};
     BUS_TYPES.forEach(type => {
-      uptimeByType[type] = v2gUptimeHoursFor(VALUE_ASSUMPTIONS[`type${type}KwhPerKm`]);
+      uptimeByType[type] = v2gUptimeHoursFor(VALUE_ASSUMPTIONS[`${type}KwhPerKm`]);
     });
     const blendedUptime = totalEVs > 0
       ? BUS_TYPES.reduce((sum, type) => sum + evCounts[type] * uptimeByType[type], 0) / totalEVs
@@ -538,13 +572,17 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fleet_size: state.fleet_size,
-          pct_ev: state.pct_ev,
-          vehicle_size: dominantVehicleSize(),
-          daily_km: dailyKmBucket(state.daily_km),
-          operating_hours: state.operating_hours,
+          session_id: state.session_id,
+          small_count: state.smallCount,
+          standard_count: state.largeCount,
+          daily_km: state.daily_km,
+          morning_start: state.morning_start,
+          morning_end: state.morning_end,
+          afternoon_start: state.afternoon_start,
+          afternoon_end: state.afternoon_end,
+          available_5_9pm: !!state.depotEvening,
+          central_depot: !!state.centralDepot,
           province: state.province,
-          annual_fuel_spend: state.annual_fuel_spend,
         }),
       });
       const data = await res.json();

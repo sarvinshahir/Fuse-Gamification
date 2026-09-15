@@ -978,18 +978,16 @@ window.FuseScene = (function () {
   // differentiated by a pop-in scale multiplier.
   const FLEET_POP_SCALE = 0.75;
   const FLEET_TYPE_CONFIG = {
-    D: { maker: makeFullSizeBus, scaleMul: 1.0 },
-    C: { maker: makeFullSizeBus, scaleMul: 0.85 },
-    B: { maker: makeCutawayBus, scaleMul: 1.0 },
-    A: { maker: makeCutawayBus, scaleMul: 0.85 },
+    large: { maker: makeFullSizeBus, scaleMul: 1.0 },
+    small: { maker: makeCutawayBus, scaleMul: 1.0 },
   };
 
-  // Builds the fleet grid from counts per bus type (e.g. {A, B, C, D}),
+  // Builds the fleet grid from counts per bus type (e.g. {small, large}),
   // largest type first, in one combined grid.
   function showFleetGrid(counts) {
     [...trucks.children].forEach(t => trucks.remove(t));
     const queue = [];
-    ['D', 'C', 'B', 'A'].forEach(type => {
+    ['large', 'small'].forEach(type => {
       for (let i = 0; i < (counts[type] || 0); i++) queue.push(type);
     });
     const count = queue.length;
