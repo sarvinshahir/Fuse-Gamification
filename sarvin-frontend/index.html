@@ -51,6 +51,7 @@
     .step-subtitle { font-size: 14px; color: #888; margin-bottom: 28px; }
 
     label { display: block; font-size: 14px; font-weight: 600; color: #444; margin-bottom: 8px; }
+    .label-sub { font-size: 12px; color: #aaa; font-weight: normal; margin-bottom: 8px; display: block; margin-top: -4px; }
 
     select, input[type="number"], input[type="text"], input[type="email"] {
       width: 100%;
@@ -81,6 +82,25 @@
     .radio-btn.selected { border-color: #1B4F8A; background: #1B4F8A; color: white; }
 
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .fleet-card {
+      background: #f4f8ff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      border: 2px solid #e0e0e0;
+    }
+    .fleet-card h4 { color: #1B4F8A; font-size: 15px; margin-bottom: 4px; }
+    .fleet-card p { font-size: 12px; color: #888; margin-bottom: 12px; }
+    .fleet-total {
+      background: #e8f5e9;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #2E7D32;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
 
     .btn-row { display: flex; gap: 12px; margin-top: 8px; }
     .btn {
@@ -188,21 +208,26 @@
     </div>
   </div>
 
-  <!-- Step 2: Fleet size -->
+  <!-- Step 2: Fleet size — two bus types -->
   <div class="step" id="step-2">
     <div class="step-title">How many buses do you operate?</div>
-    <div class="step-subtitle">Include all buses — we'll assume all eventually go electric</div>
+    <div class="step-subtitle">Enter the number for each bus type — enter 0 if you don't have that type</div>
 
-    <label>Total fleet size</label>
-    <input type="number" id="fleet_size" placeholder="e.g. 25" min="1">
+    <div class="fleet-card">
+      <h4>Small buses — Type A</h4>
+      <p>Microbird G5 · ~175 kWh battery · seats ~30</p>
+      <label>Number of small buses</label>
+      <input type="number" id="small_count" placeholder="e.g. 5" min="0" value="0" oninput="updateFleetTotal()">
+    </div>
 
-    <label>Bus size</label>
-    <select id="vehicle_size">
-      <option value="">Select bus size...</option>
-      <option value="small">Small — Microbird G5 (~175 kWh battery)</option>
-      <option value="medium">Medium — Lion C / Lion D (~255 kWh battery)</option>
-      <option value="large">Large — Blue Bird Vision / All American (~255 kWh battery)</option>
-    </select>
+    <div class="fleet-card">
+      <h4>Standard buses — Type C / Type D</h4>
+      <p>Lion C, Lion D, Blue Bird Vision, All American · ~255 kWh battery</p>
+      <label>Number of standard buses</label>
+      <input type="number" id="standard_count" placeholder="e.g. 20" min="0" value="0" oninput="updateFleetTotal()">
+    </div>
+
+    <div class="fleet-total" id="fleet_total">Total fleet: 0 buses</div>
 
     <div class="error-msg" id="err-2"></div>
     <div class="btn-row">
@@ -375,8 +400,8 @@
         <div class="r-value" id="res-battery" style="font-size:18px">—</div>
       </div>
       <div class="result-card">
-        <div class="r-label">Full recharge time</div>
-        <div class="r-value" id="res-recharge" style="font-size:18px">—</div>
+        <div class="r-label">Avg battery size</div>
+        <div class="r-value" id="res-avg-battery" style="font-size:18px">—</div>
       </div>
       <div class="result-card">
         <div class="r-label">V2G energy per bus/day</div>
@@ -441,6 +466,13 @@
   const radioState = {};
   let submissionId = null;
 
+  function updateFleetTotal() {
+    const small = parseInt(document.getElementById('small_count').value) || 0;
+    const standard = parseInt(document.getElementById('standard_count').value) || 0;
+    const total = small + standard;
+    document.getElementById('fleet_total').textContent = `Total fleet: ${total} bus${total === 1 ? '' : 'es'}`;
+  }
+
   function updateProgress() {
     const pct = (currentStep / (TOTAL_STEPS - 1)) * 100;
     document.getElementById('progressFill').style.width = pct + '%';
@@ -481,11 +513,10 @@
       }
     }
     if (step === 2) {
-      if (!document.getElementById('fleet_size').value) {
-        errEl.textContent = 'Please enter your fleet size.'; return false;
-      }
-      if (!document.getElementById('vehicle_size').value) {
-        errEl.textContent = 'Please select your bus size.'; return false;
+      const small = parseInt(document.getElementById('small_count').value) || 0;
+      const standard = parseInt(document.getElementById('standard_count').value) || 0;
+      if (small + standard === 0) {
+        errEl.textContent = 'Please enter at least 1 bus.'; return false;
       }
     }
     if (step === 3) {
@@ -520,8 +551,8 @@
       payload.province = document.getElementById('province').value;
     }
     if (step >= 2) {
-      payload.fleet_size = parseInt(document.getElementById('fleet_size').value) || null;
-      payload.vehicle_size = document.getElementById('vehicle_size').value || null;
+      payload.small_count = parseInt(document.getElementById('small_count').value) || 0;
+      payload.standard_count = parseInt(document.getElementById('standard_count').value) || 0;
     }
     if (step >= 3) {
       payload.daily_km = parseFloat(document.getElementById('daily_km').value) || null;
@@ -531,8 +562,10 @@
       payload.morning_end = parseFloat(document.getElementById('morning_end').value) || null;
     }
     if (step >= 5) {
-      payload.afternoon_start = parseFloat(document.getElementById('afternoon_start').value) || null;
-      payload.afternoon_end = parseFloat(document.getElementById('afternoon_end').value) || null;
+      payload.afternoon_start = document.getElementById('afternoon_start').value
+        ? parseFloat(document.getElementById('afternoon_start').value) : null;
+      payload.afternoon_end = document.getElementById('afternoon_end').value
+        ? parseFloat(document.getElementById('afternoon_end').value) : null;
     }
     if (step >= 6) {
       if (radioState['available_5_9pm'] !== undefined) payload.available_5_9pm = radioState['available_5_9pm'];
@@ -555,17 +588,15 @@
   async function calculateAndShow() {
     const payload = {
       session_id: SESSION_ID,
-      fleet_size: parseInt(document.getElementById('fleet_size').value),
-      vehicle_size: document.getElementById('vehicle_size').value,
+      small_count: parseInt(document.getElementById('small_count').value) || 0,
+      standard_count: parseInt(document.getElementById('standard_count').value) || 0,
       daily_km: parseFloat(document.getElementById('daily_km').value),
       morning_start: parseFloat(document.getElementById('morning_start').value),
       morning_end: parseFloat(document.getElementById('morning_end').value),
       afternoon_start: document.getElementById('afternoon_start').value
-        ? parseFloat(document.getElementById('afternoon_start').value)
-        : null,
+        ? parseFloat(document.getElementById('afternoon_start').value) : null,
       afternoon_end: document.getElementById('afternoon_end').value
-        ? parseFloat(document.getElementById('afternoon_end').value)
-        : null,
+        ? parseFloat(document.getElementById('afternoon_end').value) : null,
       available_5_9pm: radioState['available_5_9pm'],
       midday_available: radioState['midday_available'],
       province: document.getElementById('province').value,
@@ -587,7 +618,7 @@
       document.getElementById('res-fuel').textContent = "$" + data.net_fuel_savings.toLocaleString();
       document.getElementById('res-total').textContent = fmt(data.total_benefit_low, data.total_benefit_high);
       document.getElementById('res-battery').textContent = data.available_energy_at_5pm_kwh + " kWh";
-      document.getElementById('res-recharge').textContent = data.full_recharge_time_hrs + " hrs";
+      document.getElementById('res-avg-battery').textContent = data.avg_battery_kwh + " kWh";
       document.getElementById('res-kwh').textContent = data.v2g_kwh_per_bus_per_day + " kWh";
       document.getElementById('res-energy').textContent = data.annual_v2g_energy_kwh.toLocaleString() + " kWh";
 
@@ -620,6 +651,8 @@
     if (!name) { errEl.textContent = 'Please enter your name.'; return; }
     if (!email) { errEl.textContent = 'Please enter your email.'; return; }
     try {
+      const small = parseInt(document.getElementById('small_count').value) || 0;
+      const standard = parseInt(document.getElementById('standard_count').value) || 0;
       await fetch(API + "/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -629,7 +662,7 @@
           contact_name: name,
           email: email,
           phone: document.getElementById('contact_phone').value.trim(),
-          fleet_size: parseInt(document.getElementById('fleet_size').value) || 0,
+          fleet_size: small + standard,
           best_time: document.getElementById('contact_best_time').value.trim(),
           notes: ""
         })
