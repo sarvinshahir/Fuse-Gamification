@@ -89,44 +89,30 @@
       <div class="section-label">Your Fleet</div>
 
       <div class="question">
-        <label>How many Type A and B buses are in your fleet?</label>
+        <label>How many small buses are in your fleet?</label>
         <div class="dual-range">
           <div class="dual-range-track">
-            <div class="dual-range-fill" id="typeABFill"></div>
+            <div class="dual-range-fill" id="typeSmallFill"></div>
           </div>
-          <input type="range" id="typeABCount" min="0" max="100" step="5" value="0">
+          <input type="range" id="typeSmallCount" min="0" max="100" step="5" value="0">
           <div class="dual-range-labels">
             <span>0</span><span>100</span>
           </div>
-          <div class="dual-range-value" id="typeABValue">0 vehicles</div>
+          <div class="dual-range-value" id="typeSmallValue">0 vehicles</div>
         </div>
       </div>
 
       <div class="question">
-        <label>How many Type C buses are in your fleet?</label>
+        <label>How many large buses are in your fleet?</label>
         <div class="dual-range">
           <div class="dual-range-track">
-            <div class="dual-range-fill" id="typeCFill"></div>
+            <div class="dual-range-fill" id="typeLargeFill"></div>
           </div>
-          <input type="range" id="typeCCount" min="0" max="100" step="5" value="0">
+          <input type="range" id="typeLargeCount" min="0" max="100" step="5" value="0">
           <div class="dual-range-labels">
             <span>0</span><span>100</span>
           </div>
-          <div class="dual-range-value" id="typeCValue">0 vehicles</div>
-        </div>
-      </div>
-
-      <div class="question">
-        <label>How many Type D buses are in your fleet?</label>
-        <div class="dual-range">
-          <div class="dual-range-track">
-            <div class="dual-range-fill" id="typeDFill"></div>
-          </div>
-          <input type="range" id="typeDCount" min="0" max="50" step="5" value="0">
-          <div class="dual-range-labels">
-            <span>0</span><span>50</span>
-          </div>
-          <div class="dual-range-value" id="typeDValue">0 vehicles</div>
+          <div class="dual-range-value" id="typeLargeValue">0 vehicles</div>
         </div>
       </div>
 
@@ -141,17 +127,32 @@
     <div class="panel panel-card">
       <div class="section-label">Operating Hours</div>
       <div class="question">
-        <label>What time do daily operations begin and end?</label>
+        <label>What time does the morning school bus route run?</label>
         <div class="dual-range">
           <div class="dual-range-track">
-            <div class="dual-range-fill" id="hoursFill"></div>
+            <div class="dual-range-fill" id="hoursFillAM"></div>
           </div>
-          <input type="range" id="opsStart" min="0" max="24" step="0.5" value="7">
-          <input type="range" id="opsEnd"   min="0" max="24" step="0.5" value="18">
+          <input type="range" id="opsStartAM" min="0" max="24" step="0.5" value="7">
+          <input type="range" id="opsEndAM"   min="0" max="24" step="0.5" value="9">
           <div class="dual-range-labels">
             <span>12am</span><span>12pm</span><span>12am</span>
           </div>
-          <div class="dual-range-value" id="hoursValue">7:00am – 6:00pm</div>
+          <div class="dual-range-value" id="hoursValueAM">7:00am – 9:00am</div>
+        </div>
+      </div>
+
+      <div class="question">
+        <label>What time does the after school bus route run?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="hoursFillPM"></div>
+          </div>
+          <input type="range" id="opsStartPM" min="0" max="24" step="0.5" value="14">
+          <input type="range" id="opsEndPM"   min="0" max="24" step="0.5" value="16.5">
+          <div class="dual-range-labels">
+            <span>12am</span><span>12pm</span><span>12am</span>
+          </div>
+          <div class="dual-range-value" id="hoursValuePM">2:00pm – 4:30pm</div>
         </div>
       </div>
       <!-- <p class="hint-block">Vehicles pop in and out of the depot to match your operating window.</p> -->
@@ -201,6 +202,14 @@
         </div>
       </div>
 
+      <div class="question">
+        <label>Are your busses at the depot between 5:00pm and 9:00pm?</label>
+        <div class="checkbox-group" id="depotEveningGroup">
+          <label><input type="checkbox" name="depotEvening" value="yes"> yes</label>
+          <label><input type="checkbox" name="depotEvening" value="no"> no</label>
+        </div>
+      </div>
+
       <div class="sub-questions" id="depotSubQuestions">
         <div class="question">
           <label>Land Ownership</label>
@@ -240,29 +249,8 @@
     </div>
   </section>
 
-  <!-- STEP 6 : AVERAGE ANNUAL FUEL SPEND -->
+  <!-- STEP 6: ELECTRIFICATION INTEREST -->
   <section class="step" data-step="6">
-    <div class="panel panel-card">
-      <div class="section-label">Daily Usage</div>
-      <div class="question">
-        <label for="fuelSpend">What is your average annual fuel spend per bus?</label>
-        <input type="number" id="fuelSpend" min="0" step="1" inputmode="numeric" placeholder="e.g. 10000">
-      </div>
-
-      <!-- <div class="value-callout" id="fuelSavingsCallout" hidden>
-        <div class="value-callout-label">Estimated Annual Fuel Savings</div>
-        <div class="value-callout-amount" id="fuelSavingsAmount">$0</div>
-      </div> -->
-
-      <div class="step-nav">
-        <button class="btn-secondary" data-back>Back</button>
-        <button class="btn-primary" data-next>Next</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- STEP 7: ELECTRIFICATION INTEREST -->
-  <section class="step" data-step="7">
     <div class="panel panel-card">
       <div class="section-label">Electrification</div>
 
@@ -294,28 +282,8 @@
     </div>
   </section>
 
-   <!-- STEP 6: CHARGERS -->
-  <!-- <section class="step" data-step="6">
-    <div class="panel panel-card">
-      <div class="section-label">Electrification</div>
-      <div class="question">
-        <label>Chargers</label>
-        <div class="dual-range">
-          <div class="dual-range-track">
-            <div class="dual-range-fill" id="evFill"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="step-nav">
-        <button class="btn-secondary" data-back>Back</button>
-        <button class="btn-primary" data-next disabled>Next</button>
-      </div>
-    </div>
-  </section> -->
-
-  <!-- STEP 8 : REVIEW & SUBMIT -->
-  <section class="step" data-step="8">
+  <!-- STEP 7 : REVIEW & SUBMIT -->
+  <section class="step" data-step="7">
     <div class="panel panel-card">
       <div class="section-label">Electrification Scorecard</div>
 
