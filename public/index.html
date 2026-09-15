@@ -89,30 +89,44 @@
       <div class="section-label">Your Fleet</div>
 
       <div class="question">
-        <label>How many medium duty vehicles are in your fleet?</label>
+        <label>How many Type A and B buses are in your fleet?</label>
         <div class="dual-range">
           <div class="dual-range-track">
-            <div class="dual-range-fill" id="mediumFill"></div>
+            <div class="dual-range-fill" id="typeABFill"></div>
           </div>
-          <input type="range" id="mediumCount" min="0" max="30" step="1" value="0">
+          <input type="range" id="typeABCount" min="0" max="100" step="5" value="0">
           <div class="dual-range-labels">
-            <span>0</span><span>30</span>
+            <span>0</span><span>100</span>
           </div>
-          <div class="dual-range-value" id="mediumValue">0 vehicles</div>
+          <div class="dual-range-value" id="typeABValue">0 vehicles</div>
         </div>
       </div>
 
       <div class="question">
-        <label>How many heavy duty vehicles are in your fleet?</label>
+        <label>How many Type C buses are in your fleet?</label>
         <div class="dual-range">
           <div class="dual-range-track">
-            <div class="dual-range-fill" id="heavyFill"></div>
+            <div class="dual-range-fill" id="typeCFill"></div>
           </div>
-          <input type="range" id="heavyCount" min="0" max="30" step="1" value="0">
+          <input type="range" id="typeCCount" min="0" max="100" step="5" value="0">
           <div class="dual-range-labels">
-            <span>0</span><span>30</span>
+            <span>0</span><span>100</span>
           </div>
-          <div class="dual-range-value" id="heavyValue">0 vehicles</div>
+          <div class="dual-range-value" id="typeCValue">0 vehicles</div>
+        </div>
+      </div>
+
+      <div class="question">
+        <label>How many Type D buses are in your fleet?</label>
+        <div class="dual-range">
+          <div class="dual-range-track">
+            <div class="dual-range-fill" id="typeDFill"></div>
+          </div>
+          <input type="range" id="typeDCount" min="0" max="50" step="5" value="0">
+          <div class="dual-range-labels">
+            <span>0</span><span>50</span>
+          </div>
+          <div class="dual-range-value" id="typeDValue">0 vehicles</div>
         </div>
       </div>
 
@@ -159,11 +173,11 @@
           <div class="dual-range-track">
             <div class="dual-range-fill" id="distanceFill"></div>
           </div>
-          <input type="range" id="avgDistance" min="0" max="400" step="10" value="150">
+          <input type="range" id="avgDistance" min="0" max="200" step="10" value="100">
           <div class="dual-range-labels">
-            <span>0 km</span><span>400 km</span>
+            <span>0 km</span><span>200 km</span>
           </div>
-          <div class="dual-range-value" id="distanceValue">150 km/day</div>
+          <div class="dual-range-value" id="distanceValue">100 km/day</div>
         </div>
       </div>
 
@@ -174,24 +188,8 @@
     </div>
   </section>
 
-  <!-- STEP 5 : AVERAGE ANNUAL FUEL SPEND -->
+  <!-- STEP 5 : DEPOT -->
   <section class="step" data-step="5">
-    <div class="panel panel-card">
-      <div class="section-label">Daily Usage</div>
-      <div class="question">
-        <label for="fuelSpend">What is your average annual fuel spend?</label>
-        <input type="number" id="fuelSpend" min="0" step="1" inputmode="numeric" placeholder="e.g. 50000">
-      </div>
-
-      <div class="step-nav">
-        <button class="btn-secondary" data-back>Back</button>
-        <button class="btn-primary" data-next>Next</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- STEP 6 : DEPOT -->
-  <section class="step" data-step="6">
     <div class="panel panel-card">
       <div class="section-label">Depot</div>
 
@@ -209,6 +207,7 @@
           <div class="radio-group">
             <label><input type="radio" name="landOwnership" value="own"> Own</label>
             <label><input type="radio" name="landOwnership" value="lease"> Lease</label>
+            <label><input type="radio" name="landOwnership" value="both"> Both</label>
           </div>
         </div>
 
@@ -217,14 +216,14 @@
           <input type="number" id="leaseYears" min="0" max="99" step="1" placeholder="e.g. 5">
         </div>
 
-        <div class="question">
+        <!-- <div class="question">
           <label>Does the site require strata approval?</label>
           <div class="radio-group">
             <label><input type="radio" name="strataApproval" value="yes"> Yes</label>
             <label><input type="radio" name="strataApproval" value="no"> No</label>
           </div>
-        </div>
-<!-- 
+        </div> -->
+<!--
         <div class="question">
           <label>Is there enough room for charger(s)?</label>
           <div class="radio-group">
@@ -241,27 +240,51 @@
     </div>
   </section>
 
-  <!-- STEP 7: EV PERCENTAGE -->
+  <!-- STEP 6 : AVERAGE ANNUAL FUEL SPEND -->
+  <section class="step" data-step="6">
+    <div class="panel panel-card">
+      <div class="section-label">Daily Usage</div>
+      <div class="question">
+        <label for="fuelSpend">What is your average annual fuel spend per bus?</label>
+        <input type="number" id="fuelSpend" min="0" step="1" inputmode="numeric" placeholder="e.g. 10000">
+      </div>
+
+      <!-- <div class="value-callout" id="fuelSavingsCallout" hidden>
+        <div class="value-callout-label">Estimated Annual Fuel Savings</div>
+        <div class="value-callout-amount" id="fuelSavingsAmount">$0</div>
+      </div> -->
+
+      <div class="step-nav">
+        <button class="btn-secondary" data-back>Back</button>
+        <button class="btn-primary" data-next>Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 7: ELECTRIFICATION INTEREST -->
   <section class="step" data-step="7">
     <div class="panel panel-card">
       <div class="section-label">Electrification</div>
+
       <div class="question">
-        <label>What percentage of your fleet will be electric vehicles?</label>
+        <label>Between 1–10, rate your interest in electrifying your fleet</label>
         <div class="dual-range">
           <div class="dual-range-track">
-            <div class="dual-range-fill" id="evFill"></div>
+            <div class="dual-range-fill" id="interestFill"></div>
           </div>
-          <input type="range" id="evPercent" min="0" max="100" step="5" value="0">
+          <input type="range" id="electrificationInterest" min="1" max="10" step="1" value="1">
           <div class="dual-range-labels">
-            <span>0%</span><span>100%</span>
+            <span>1</span><span>10</span>
           </div>
-          <div class="dual-range-value" id="evValue">0% electric</div>
+          <div class="dual-range-value" id="interestValue">5 / 10</div>
         </div>
       </div>
+      
+      <p id="interestHint">Swapping buses to electric cuts fuel spend directly.</p>
 
       <div class="value-callout">
-        <div class="value-callout-label">Estimated Annual V2G Value</div>
-        <div class="value-callout-amount" id="evStepValueAmount">$0</div>
+        <div class="value-callout-label">Estimated Annual Fuel Savings</div>
+        <div class="value-callout-amount" id="interestStepFuelSavingsAmount">$0</div>
       </div>
 
       <div class="step-nav">
@@ -296,17 +319,19 @@
     <div class="panel panel-card">
       <div class="section-label">Electrification Scorecard</div>
 
-      <div class="value-callout">
+      <div class="narrative" id="summary"></div>
+      
+      <div class="value-callout" id="reviewValueCallout" hidden>
         <div class="value-callout-label">Estimated Annual V2G Value</div>
         <div class="value-callout-amount" id="valueAmount">$0</div>
       </div>
-
-      <div class="narrative" id="summary"></div>
 
       <div class="step-nav">
         <button class="btn-secondary" data-back>Back</button>
         <button class="btn-primary" id="submitBtn">Learn More</button>
       </div>
+
+    
       <div class="submit-status" id="submitStatus"></div>
     </div>
   </section>
