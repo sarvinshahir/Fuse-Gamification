@@ -24,6 +24,7 @@ window.FuseScene = (function () {
   let hitPt = new THREE.Vector3();
   let truckScale = 0.5;
   let lot = null;
+  let maxKm = 200;
 
   const spacingX = 7.5;
   const spacingZ = 15;
@@ -38,6 +39,7 @@ window.FuseScene = (function () {
   let trucks; // THREE.Group of the currently spawned buses, child of stage (not groups.city/depot, so it isn't hidden when either toggles)
   let splashCar = null;
   const exhaustPuffs = []; // { mesh, age, maxAge, vel }
+  let exhaustEnabled = true;
 
   // ---------- material / mesh factories ----------
   function makeToonGradient(steps) {
@@ -51,8 +53,18 @@ window.FuseScene = (function () {
     return tex;
   }
 
+  // materials are cached by color+opts — every bus/building/tree used to get
+  // brand-new MeshToonMaterial instances, which multiplies badly once a fleet
+  // has hundreds of buses on screen
+  const matCache = new Map();
   function toonMat(color, opts) {
-    return new THREE.MeshToonMaterial(Object.assign({ color, gradientMap: toonGradient }, opts));
+    const key = color + (opts ? ':' + JSON.stringify(opts) : '');
+    let mat = matCache.get(key);
+    if (!mat) {
+      mat = new THREE.MeshToonMaterial(Object.assign({ color, gradientMap: toonGradient }, opts));
+      matCache.set(key, mat);
+    }
+    return mat;
   }
 
   function mats() {
@@ -62,6 +74,83 @@ window.FuseScene = (function () {
       glass: toonMat(0x5fd4ff, { transparent: true, opacity: 0.55 }),
       wheel: toonMat(0x161616),
     };
+  }
+
+  // ---------- shared geometry cache ----------
+  // bus/building/tree parts reuse a handful of box/cylinder sizes; caching by
+  // dimensions avoids re-allocating (and re-triangulating) the same shape for
+  // every one of the hundreds of buses a large fleet can spawn
+  const geoCache = new Map();
+  function boxGeo(w, h, d) {
+    const key = `box:${w}:${h}:${d}`;
+    let geo = geoCache.get(key);
+    if (!geo) { geo = new THREE.BoxGeometry(w, h, d); geoCache.set(key, geo); }
+    return geo;
+  }
+  function cylGeo(radiusTop, radiusBottom, height, segments) {
+    const key = `cyl:${radiusTop}:${radiusBottom}:${height}:${segments}`;
+    let geo = geoCache.get(key);
+    if (!geo) { geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segments); geoCache.set(key, geo); }
+    return geo;
+  }
+
+  // concatenates several indexed BufferGeometries (position/normal/uv) into one
+  function mergeGeometries(geoms) {
+    let vertCount = 0, idxCount = 0;
+    geoms.forEach(geo => { vertCount += geo.attributes.position.count; idxCount += geo.index.count; });
+    const positions = new Float32Array(vertCount * 3);
+    const normals = new Float32Array(vertCount * 3);
+    const uvs = new Float32Array(vertCount * 2);
+    const indices = new Uint32Array(idxCount);
+    let vOffset = 0, iOffset = 0;
+    geoms.forEach(geo => {
+      positions.set(geo.attributes.position.array, vOffset * 3);
+      normals.set(geo.attributes.normal.array, vOffset * 3);
+      uvs.set(geo.attributes.uv.array, vOffset * 2);
+      const idx = geo.index.array;
+      for (let i = 0; i < idx.length; i++) indices[iOffset + i] = idx[i] + vOffset;
+      iOffset += idx.length;
+      vOffset += geo.attributes.position.count;
+    });
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    merged.setIndex(new THREE.BufferAttribute(indices, 1));
+    return merged;
+  }
+
+  // clones geo and bakes a local position ([x,y,z]) + Euler rotation ([rx,ry,rz]) into its vertices
+  function bakedPart(geo, pos, rot) {
+    const clone = geo.clone();
+    if (pos || rot) {
+      const quat = rot ? new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0] || 0, rot[1] || 0, rot[2] || 0)) : new THREE.Quaternion();
+      const p = pos ? new THREE.Vector3(pos[0] || 0, pos[1] || 0, pos[2] || 0) : new THREE.Vector3();
+      clone.applyMatrix4(new THREE.Matrix4().compose(p, quat, new THREE.Vector3(1, 1, 1)));
+    }
+    return clone;
+  }
+
+  // Collects a model's many small parts and, per (material, castShadow) pair,
+  // merges them into one mesh — so a ~30-part bus becomes a handful of draw
+  // calls instead of one per part, which matters once hundreds are on screen.
+  function createPartBuilder() {
+    const buckets = new Map();
+    function add(geo, mat, pos, rot, castShadow = false) {
+      const key = mat.uuid + ':' + castShadow;
+      let bucket = buckets.get(key);
+      if (!bucket) { bucket = { mat, castShadow, geos: [] }; buckets.set(key, bucket); }
+      bucket.geos.push(bakedPart(geo, pos, rot));
+    }
+    function build(group) {
+      buckets.forEach(({ mat, castShadow, geos }) => {
+        const geometry = geos.length === 1 ? geos[0] : mergeGeometries(geos);
+        const mesh = new THREE.Mesh(geometry, mat);
+        mesh.castShadow = castShadow;
+        group.add(mesh);
+      });
+    }
+    return { add, build };
   }
 
   // ---------- exhaust puffs ----------
@@ -172,33 +261,23 @@ window.FuseScene = (function () {
     const amber = toonMat(0xffb300);
     const length = 6.6;
     const bodyW = 1.9;
+    const pb = createPartBuilder();
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, 1.55, length), bus);
-    body.position.y = 1.08;
-    body.castShadow = true;
-    g.add(body);
+    pb.add(boxGeo(bodyW, 1.55, length), bus, [0, 1.08, 0], null, true);
 
     // small amber roof-corner lights (no signage board — just the marker lights)
     [-0.5, 0.5].forEach(x => {
-      const roofLight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.08), amber);
-      roofLight.position.set(x, 1.87, length / 2 - 0.1);
-      g.add(roofLight);
+      pb.add(boxGeo(0.1, 0.06, 0.08), amber, [x, 1.87, length / 2 - 0.1]);
     });
 
-    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.58, 0.06), m.glass);
-    windshield.position.set(0, 1.25, length / 2 + 0.02);
-    g.add(windshield);
+    pb.add(boxGeo(1.7, 0.58, 0.06), m.glass, [0, 1.25, length / 2 + 0.02]);
 
     // entry door, right behind the windshield/cowl
     const doorZoneLength = 1.1;
     const doorZoneFrontZ = length / 2 - 0.05;
     const doorCenterZ = doorZoneFrontZ - doorZoneLength / 2;
-    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.15, doorZoneLength * 0.75), m.dark);
-    doorFrame.position.set(bodyW / 2 + 0.01, 1.0, doorCenterZ);
-    g.add(doorFrame);
-    const doorGlass = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.4, doorZoneLength * 0.5), m.glass);
-    doorGlass.position.set(bodyW / 2 + 0.02, 1.4, doorCenterZ);
-    g.add(doorGlass);
+    pb.add(boxGeo(0.05, 1.15, doorZoneLength * 0.75), m.dark, [bodyW / 2 + 0.01, 1.0, doorCenterZ]);
+    pb.add(boxGeo(0.04, 0.4, doorZoneLength * 0.5), m.glass, [bodyW / 2 + 0.02, 1.4, doorCenterZ]);
 
     // row of individual window bays behind the door, back toward the rear cap
     const rearMargin = 0.5;
@@ -207,86 +286,56 @@ window.FuseScene = (function () {
     const windowCount = 9;
     const windowSpacing = windowZoneLength / windowCount;
     for (let i = 0; i < windowCount; i++) {
-      const win = new THREE.Mesh(
-        new THREE.BoxGeometry(bodyW + 0.02, 0.48, windowSpacing * 0.78),
-        m.glass
+      pb.add(
+        boxGeo(bodyW + 0.02, 0.48, windowSpacing * 0.78),
+        m.glass,
+        [0, 1.35, windowZoneFrontZ - windowSpacing * (i + 0.5)]
       );
-      win.position.set(0, 1.35, windowZoneFrontZ - windowSpacing * (i + 0.5));
-      g.add(win);
     }
 
     // two black beltline stripes running the length of the bus
     [1.0, 0.62].forEach(y => {
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(bodyW + 0.02, 0.055, length - 0.9), m.dark);
-      stripe.position.set(0, y, -0.15);
-      g.add(stripe);
+      pb.add(boxGeo(bodyW + 0.02, 0.055, length - 0.9), m.dark, [0, y, -0.15]);
     });
 
-    const grille = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.15), m.dark);
-    grille.position.set(0, 0.55, length / 2 + 0.1);
-    g.add(grille);
+    pb.add(boxGeo(1.8, 0.5, 0.15), m.dark, [0, 0.55, length / 2 + 0.1]);
 
     [-0.68, 0.68].forEach(x => {
-      const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.05), lamp);
-      headlight.position.set(x, 0.65, length / 2 + 0.12);
-      g.add(headlight);
-      const signal = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.05), amber);
-      signal.position.set(x, 0.45, length / 2 + 0.12);
-      g.add(signal);
-      const marker = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.05), amber);
-      marker.position.set(x, 1.0, length / 2 + 0.12);
-      g.add(marker);
+      pb.add(boxGeo(0.24, 0.16, 0.05), lamp, [x, 0.65, length / 2 + 0.12]);
+      pb.add(boxGeo(0.16, 0.1, 0.05), amber, [x, 0.45, length / 2 + 0.12]);
+      pb.add(boxGeo(0.1, 0.08, 0.05), amber, [x, 1.0, length / 2 + 0.12]);
     });
 
-    const bumperFront = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.28, 0.2), m.dark);
-    bumperFront.position.set(0, 0.3, length / 2 + 0.18);
-    g.add(bumperFront);
-    const bumperRear = bumperFront.clone();
-    bumperRear.position.z = -length / 2 - 0.08;
-    g.add(bumperRear);
+    const bumperGeo = boxGeo(1.85, 0.28, 0.2);
+    pb.add(bumperGeo, m.dark, [0, 0.3, length / 2 + 0.18]);
+    pb.add(bumperGeo, m.dark, [0, 0.3, -length / 2 - 0.08]);
 
     if (isEV) {
-      const port = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.05), toonMat(0x33dd66));
-      port.position.set(0.96, 0.9, -length / 2 + 1.1);
-      g.add(port);
+      pb.add(boxGeo(0.16, 0.16, 0.05), toonMat(0x33dd66), [0.96, 0.9, -length / 2 + 1.1]);
     } else {
-      const tailpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 8), m.dark);
-      tailpipe.rotation.x = Math.PI / 2;
-      tailpipe.position.set(-0.85, 0.32, -length / 2 - 0.18);
-      g.add(tailpipe);
+      pb.add(cylGeo(0.05, 0.05, 0.22, 8), m.dark, [-0.85, 0.32, -length / 2 - 0.18], [Math.PI / 2, 0, 0]);
       g.userData.exhaustPoint = new THREE.Vector3(-0.85, 0.32, -length / 2 - 0.32);
     }
 
     // large West Coast-style mirrors on long arms off the cowl
     [-1, 1].forEach(sign => {
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 6), m.dark);
-      arm.rotation.z = Math.PI / 2;
-      arm.position.set(sign * 1.15, 1.55, length / 2 - 0.05);
-      g.add(arm);
-      const mirrorHead = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.4, 0.26), m.dark);
-      mirrorHead.position.set(sign * 1.42, 1.5, length / 2 - 0.05);
-      g.add(mirrorHead);
+      pb.add(cylGeo(0.035, 0.035, 0.5, 6), m.dark, [sign * 1.15, 1.55, length / 2 - 0.05], [0, 0, Math.PI / 2]);
+      pb.add(boxGeo(0.07, 0.4, 0.26), m.dark, [sign * 1.42, 1.5, length / 2 - 0.05]);
     });
 
     // front axle: single wheels
-    const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.32, 14);
+    const wheelGeo = cylGeo(0.4, 0.4, 0.32, 14);
     [-0.95, 0.95].forEach(x => {
-      const w = new THREE.Mesh(wheelGeo, m.wheel);
-      w.rotation.z = Math.PI / 2;
-      w.position.set(x, 0.4, length / 2 - 0.9);
-      w.castShadow = true;
-      g.add(w);
+      pb.add(wheelGeo, m.wheel, [x, 0.4, length / 2 - 0.9], [0, 0, Math.PI / 2], true);
     });
 
     // rear axle: wider cylinders to read as dual wheels
-    const dualWheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.52, 14);
+    const dualWheelGeo = cylGeo(0.4, 0.4, 0.52, 14);
     [-1, 1].forEach(sign => {
-      const w = new THREE.Mesh(dualWheelGeo, m.wheel);
-      w.rotation.z = Math.PI / 2;
-      w.position.set(sign * 0.95, 0.4, -length / 2 + 1.3);
-      w.castShadow = true;
-      g.add(w);
+      pb.add(dualWheelGeo, m.wheel, [sign * 0.95, 0.4, -length / 2 + 1.3], [0, 0, Math.PI / 2], true);
     });
+
+    pb.build(g);
 
     g.userData.isEV = isEV;
     g.userData.busType = 'full';
@@ -318,126 +367,81 @@ window.FuseScene = (function () {
     const bodyW = 1.92;
     const bodyFrontZ = front - hoodLength;
     const bodyCenterZ = bodyFrontZ - bodyLength / 2;
+    const pb = createPartBuilder();
 
     // ---- passenger box ----
-    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, 1.6, bodyLength), bus);
-    body.position.set(0, 1.1, bodyCenterZ);
-    body.castShadow = true;
-    g.add(body);
+    pb.add(boxGeo(bodyW, 1.6, bodyLength), bus, [0, 1.1, bodyCenterZ], null, true);
 
     // black "SCHOOL BUS" sign band across the front of the roof
     const signBandZ = bodyFrontZ - 0.15;
-    const roofCap = new THREE.Mesh(new THREE.BoxGeometry(bodyW + 0.02, 0.22, 0.4), m.dark);
-    roofCap.position.set(0, 1.95, signBandZ);
-    g.add(roofCap);
+    pb.add(boxGeo(bodyW + 0.02, 0.22, 0.4), m.dark, [0, 1.95, signBandZ]);
 
     // roof electronics box (crossing-arm controller / camera dome)
-    const roofBox = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.1, 0.18), m.dark);
-    roofBox.position.set(-0.55, 2.02, signBandZ);
-    g.add(roofBox);
+    pb.add(boxGeo(0.18, 0.1, 0.18), m.dark, [-0.55, 2.02, signBandZ]);
 
     // amber roof beacons flanking the sign band
     [-0.15, 0.15].forEach(x => {
-      const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.08), amber);
-      beacon.position.set(x, 2.02, signBandZ);
-      g.add(beacon);
+      pb.add(boxGeo(0.12, 0.08, 0.08), amber, [x, 2.02, signBandZ]);
     });
 
     // black rub rail running the length of the bus (stops short of the nose)
-    const rubRail = new THREE.Mesh(new THREE.BoxGeometry(bodyW + 0.04, 0.12, totalLength - 0.3), m.dark);
-    rubRail.position.set(0, 0.55, -0.15);
-    g.add(rubRail);
+    pb.add(boxGeo(bodyW + 0.04, 0.12, totalLength - 0.3), m.dark, [0, 0.55, -0.15]);
 
     // door, then a strip of window bays, front to back along the cabin
     const doorZoneLength = 0.85;
     const doorCenterZ = bodyFrontZ - doorZoneLength / 2;
-    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.15, doorZoneLength * 0.8), m.dark);
-    doorFrame.position.set(bodyW / 2 + 0.01, 1.0, doorCenterZ);
-    g.add(doorFrame);
-    const doorGlass = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.4, doorZoneLength * 0.55), m.glass);
-    doorGlass.position.set(bodyW / 2 + 0.02, 1.4, doorCenterZ);
-    g.add(doorGlass);
+    pb.add(boxGeo(0.05, 1.15, doorZoneLength * 0.8), m.dark, [bodyW / 2 + 0.01, 1.0, doorCenterZ]);
+    pb.add(boxGeo(0.04, 0.4, doorZoneLength * 0.55), m.glass, [bodyW / 2 + 0.02, 1.4, doorCenterZ]);
 
     const windowZoneLength = bodyLength - doorZoneLength - 0.15;
     const windowCount = 4;
     const windowSpacing = windowZoneLength / windowCount;
     const windowZoneFrontZ = bodyFrontZ - doorZoneLength;
     for (let i = 0; i < windowCount; i++) {
-      const win = new THREE.Mesh(
-        new THREE.BoxGeometry(bodyW + 0.02, 0.42, windowSpacing * 0.78),
-        m.glass
+      pb.add(
+        boxGeo(bodyW + 0.02, 0.42, windowSpacing * 0.78),
+        m.glass,
+        [0, 1.4, windowZoneFrontZ - windowSpacing * (i + 0.5)]
       );
-      win.position.set(0, 1.4, windowZoneFrontZ - windowSpacing * (i + 0.5));
-      g.add(win);
     }
 
     // ---- Chevy cutaway hood: two stacked volumes hint at the sloped nose ----
-    const hoodCowl = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.85, hoodLength * 0.6), m.dark);
-    hoodCowl.position.set(0, 0.75, bodyFrontZ + hoodLength * 0.3);
-    hoodCowl.castShadow = true;
-    g.add(hoodCowl);
-    const hoodNose = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.5, hoodLength * 0.55), m.dark);
-    hoodNose.position.set(0, 0.5, front - hoodLength * 0.275);
-    g.add(hoodNose);
+    pb.add(boxGeo(1.7, 0.85, hoodLength * 0.6), m.dark, [0, 0.75, bodyFrontZ + hoodLength * 0.3], null, true);
+    pb.add(boxGeo(1.55, 0.5, hoodLength * 0.55), m.dark, [0, 0.5, front - hoodLength * 0.275]);
 
-    const chromeStrip = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 0.05), chrome);
-    chromeStrip.position.set(0, 0.82, front + 0.02);
-    g.add(chromeStrip);
+    pb.add(boxGeo(1.5, 0.05, 0.05), chrome, [0, 0.82, front + 0.02]);
 
     [-0.68, 0.68].forEach(x => {
-      const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.04), lamp);
-      headlight.position.set(x, 0.62, front + 0.03);
-      g.add(headlight);
-      const signal = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.04), amber);
-      signal.position.set(x, 0.42, front + 0.03);
-      g.add(signal);
+      pb.add(boxGeo(0.22, 0.14, 0.04), lamp, [x, 0.62, front + 0.03]);
+      pb.add(boxGeo(0.16, 0.1, 0.04), amber, [x, 0.42, front + 0.03]);
     });
 
-    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 0.06), m.glass);
-    windshield.position.set(0, 1.25, bodyFrontZ + 0.05);
-    windshield.rotation.x = -0.3;
-    g.add(windshield);
+    pb.add(boxGeo(1.6, 0.6, 0.06), m.glass, [0, 1.25, bodyFrontZ + 0.05], [-0.3, 0, 0]);
 
-    const bumperFront = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.24, 0.15), m.dark);
-    bumperFront.position.set(0, 0.28, front + 0.09);
-    g.add(bumperFront);
-    const bumperRear = new THREE.Mesh(new THREE.BoxGeometry(bodyW - 0.05, 0.24, 0.15), m.dark);
-    bumperRear.position.set(0, 0.28, -front - 0.05);
-    g.add(bumperRear);
+    pb.add(boxGeo(1.75, 0.24, 0.15), m.dark, [0, 0.28, front + 0.09]);
+    pb.add(boxGeo(bodyW - 0.05, 0.24, 0.15), m.dark, [0, 0.28, -front - 0.05]);
 
     if (isEV) {
-      const port = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.05), toonMat(0x33dd66));
-      port.position.set(bodyW / 2 + 0.03, 0.85, bodyCenterZ);
-      g.add(port);
+      pb.add(boxGeo(0.14, 0.14, 0.05), toonMat(0x33dd66), [bodyW / 2 + 0.03, 0.85, bodyCenterZ]);
     } else {
-      const tailpipe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.2, 8), m.dark);
-      tailpipe.rotation.x = Math.PI / 2;
-      tailpipe.position.set(-0.8, 0.28, -front - 0.15);
-      g.add(tailpipe);
+      pb.add(cylGeo(0.045, 0.045, 0.2, 8), m.dark, [-0.8, 0.28, -front - 0.15], [Math.PI / 2, 0, 0]);
       g.userData.exhaustPoint = new THREE.Vector3(-0.8, 0.28, -front - 0.28);
     }
 
     // tow mirrors on stalks off the cab, near the windshield base
     [-1, 1].forEach(sign => {
-      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 6), m.dark);
-      stalk.rotation.z = Math.PI / 2;
-      stalk.position.set(sign * 1.05, 1.15, bodyFrontZ + 0.15);
-      g.add(stalk);
-      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.2), m.dark);
-      mirror.position.set(sign * 1.24, 1.15, bodyFrontZ + 0.15);
-      g.add(mirror);
+      pb.add(cylGeo(0.03, 0.03, 0.35, 6), m.dark, [sign * 1.05, 1.15, bodyFrontZ + 0.15], [0, 0, Math.PI / 2]);
+      pb.add(boxGeo(0.06, 0.28, 0.2), m.dark, [sign * 1.24, 1.15, bodyFrontZ + 0.15]);
     });
 
-    const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 14);
+    const wheelGeo = cylGeo(0.36, 0.36, 0.3, 14);
     [front - hoodLength * 0.7, -front + 0.85].forEach(z => {
       [-0.9, 0.9].forEach(x => {
-        const w = new THREE.Mesh(wheelGeo, m.wheel);
-        w.rotation.z = Math.PI / 2;
-        w.position.set(x, 0.36, z);
-        w.castShadow = true;
-        g.add(w);
+        pb.add(wheelGeo, m.wheel, [x, 0.36, z], [0, 0, Math.PI / 2], true);
       });
     });
+
+    pb.build(g);
 
     g.userData.isEV = isEV;
     g.userData.busType = 'cutaway';
@@ -626,7 +630,7 @@ window.FuseScene = (function () {
   // grows outward as distanceKm increases and contracts back down (never
   // below the innermost ring) as it shrinks.
   function setCityExtent(distanceKm) {
-    const activeRings = Math.min(CITY_RING_DEFS.length, 1 + Math.floor(Math.max(0, distanceKm) / 100));
+    const activeRings = Math.min(CITY_RING_DEFS.length, 1 + Math.floor(Math.max(0, distanceKm) / 50));
 
     CITY_RING_DEFS.forEach((ringDef, ring) => {
       if (ring === 0) return; // the base road cross already serves ring 0
@@ -649,13 +653,20 @@ window.FuseScene = (function () {
       // }
     });
 
-    roadNS.scale.x = 50 + distanceKm/3;
-    roadEW.scale.x = 50 + distanceKm/3;
+    roadNS.scale.x = 50 + distanceKm/2;
+    roadEW.scale.x = 50 + distanceKm/2;
 
     cityBuildingSlots.forEach((slot, i) => {
       const shouldBeBuilt = slot.ring < activeRings;
       if (shouldBeBuilt === slot.built) return;
       if (shouldBeBuilt) {
+        // a rapid teardown+rebuild of this slot (e.g. dragging the distance
+        // slider back across a ring boundary) can catch the old building/tree
+        // still mid pop-out-and-remove — finish that immediately so the new
+        // mesh doesn't sit exactly on top of it and z-fight until it fades out
+        if (slot.building) { cancelTween(slot.building); groups.city.remove(slot.building); }
+        if (slot.tree) { cancelTween(slot.tree); groups.city.remove(slot.tree); }
+
         const h = 3 + (i % 4) * 1.6;
         const b = makeBuildingBlock(6, h, 6, 0xfdfdfd);
         b.position.set(slot.x, 0, slot.z);
@@ -681,8 +692,10 @@ window.FuseScene = (function () {
           const idx = cityStaticObjects.indexOf(obj);
           if (idx !== -1) cityStaticObjects.splice(idx, 1);
         });
-        slot.building = null;
-        slot.tree = null;
+        // slot.building/slot.tree are deliberately left set (not nulled) —
+        // they're still fading out via popOutAndRemove, and the build branch
+        // above uses these refs to reclaim/cancel them if this slot gets
+        // rebuilt before the fade finishes
         slot.built = false;
       }
     });
@@ -827,6 +840,10 @@ window.FuseScene = (function () {
 
   // tears down any existing poles/wires; also called at the start of
   // showPowerlines() so re-entering the step rebuilds against the current lot size
+  function setExhaustEnabled(enabled) {
+    exhaustEnabled = enabled;
+  }
+
   function hidePowerlines() {
     powerlineObjects.forEach(obj => {
       if (obj.isLine) {
@@ -885,8 +902,8 @@ window.FuseScene = (function () {
     const t = dayPhase;
     const elevAngle = THREE.MathUtils.lerp(Math.PI * 0.42, -Math.PI * 0.18, t);
     const dist = 45;
-    // sunLight.position.set(Math.cos(elevAngle) * dist * 0.6, Math.max(Math.sin(elevAngle) * dist, 1.5), Math.sin(elevAngle) * dist * 0.3 + 10);
-    // sunLight.target.position.set(0, 0, 0);
+    sunLight.position.set(Math.cos(elevAngle) * dist * 0.6, Math.max(Math.sin(elevAngle) * dist, 1.5), Math.sin(elevAngle) * dist * 0.3 + 10);
+    sunLight.target.position.set(0, 0, 0);
 
     ambLight.intensity = THREE.MathUtils.lerp(1, 0.2, t);
     sunLight.intensity = THREE.MathUtils.lerp(1.5, 0.15, t);
@@ -930,6 +947,14 @@ window.FuseScene = (function () {
     });
   }
 
+  // drops any in-flight tween on obj — used to force-finish a still-fading
+  // popOutAndRemove() when something needs to reclaim its spot immediately
+  function cancelTween(obj) {
+    for (let i = scaleTweens.length - 1; i >= 0; i--) {
+      if (scaleTweens[i].obj === obj) scaleTweens.splice(i, 1);
+    }
+  }
+
   function updateTweens(dtMs) {
     for (let i = scaleTweens.length - 1; i >= 0; i--) {
       const tw = scaleTweens[i];
@@ -948,11 +973,26 @@ window.FuseScene = (function () {
   const splashTarget = new THREE.Vector3(0, 0, 0);
 
   // ---------- public: city (fleet-size + hours) ----------
-  // Builds the fleet grid from a mix of heavy duty (full-size bus) and medium
-  // duty (cutaway bus) vehicles, heavy first then medium, in one combined grid.
-  function showFleetGrid(heavyCount, mediumCount) {
+  // School bus classifications, largest to smallest: D and C use the
+  // full-size bus model, B and A use the cutaway model, each pair further
+  // differentiated by a pop-in scale multiplier.
+  const FLEET_POP_SCALE = 0.75;
+  const FLEET_TYPE_CONFIG = {
+    D: { maker: makeFullSizeBus, scaleMul: 1.0 },
+    C: { maker: makeFullSizeBus, scaleMul: 0.85 },
+    B: { maker: makeCutawayBus, scaleMul: 1.0 },
+    A: { maker: makeCutawayBus, scaleMul: 0.85 },
+  };
+
+  // Builds the fleet grid from counts per bus type (e.g. {A, B, C, D}),
+  // largest type first, in one combined grid.
+  function showFleetGrid(counts) {
     [...trucks.children].forEach(t => trucks.remove(t));
-    const count = heavyCount + mediumCount;
+    const queue = [];
+    ['D', 'C', 'B', 'A'].forEach(type => {
+      for (let i = 0; i < (counts[type] || 0); i++) queue.push(type);
+    });
+    const count = queue.length;
     truckColumns = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));
     truckRows  = Math.ceil(count / truckColumns);
     const startX = -((truckColumns - 1) * spacingX * truckScale) / 2;
@@ -961,12 +1001,14 @@ window.FuseScene = (function () {
     for (let r = 0; r < truckRows && placed < count; r++) {
 
       for (let c = 0; c < truckColumns && placed < count; c++) {
-        const truck = placed < heavyCount ? makeFullSizeBus(truckScale) : makeCutawayBus(truckScale);
+        const type = queue[placed];
+        const { maker, scaleMul } = FLEET_TYPE_CONFIG[type];
+        const truck = maker(truckScale);
+        truck.userData.fleetType = type;
         truck.position.set(startX + c * spacingX * truckScale, 0, startZ + r * spacingZ * truckScale);
         truck.scale.setScalar(0.001);
         trucks.add(truck);
-        // setTimeout(() => truck.scale.setScalar(truckScale), placed * 30);
-        setTimeout(() =>  popInTo(truck, 0.75, 200), placed * 20)
+        setTimeout(() =>  popInTo(truck, FLEET_POP_SCALE * scaleMul, 200), placed * 20)
         placed++;
       }
     }
@@ -1009,6 +1051,7 @@ window.FuseScene = (function () {
       const scale = truck.scale.x;
       const makeBus = truck.userData.busType === 'cutaway' ? makeCutawayBus : makeFullSizeBus;
       const replacement = makeBus(scale, shouldBeEv);
+      replacement.userData.fleetType = truck.userData.fleetType;
       replacement.position.copy(truck.position);
       replacement.rotation.copy(truck.rotation);
       // splice in at the same index instead of trucks.add() (which appends),
@@ -1102,7 +1145,7 @@ window.FuseScene = (function () {
   // pulls the camera back (wider orthographic frustum) as the average daily
   // distance grows, so a fleet that drives further reads as "covering more ground"
   function setDistanceZoom(distanceKm) {
-    const t = Math.max(0, Math.min(400, distanceKm)) / 400;
+    const t = Math.max(0, Math.min(maxKm, distanceKm)) / maxKm;
     cameraZoomTarget = 1 + t * 0.9; // 1.0x (close) .. 1.9x (pulled back)
   }
 
@@ -1256,9 +1299,9 @@ window.FuseScene = (function () {
         splashCar.rotation.y += da *  (speed / maxSpeed);
 
       }
-      updateTruckExhaust(splashCar, dtMs);
+      if (exhaustEnabled) updateTruckExhaust(splashCar, dtMs);
     }
-    if (groups.depot.visible) trucks.children.forEach(t => updateTruckExhaust(t, dtMs));
+    if (exhaustEnabled && groups.depot.visible) trucks.children.forEach(t => updateTruckExhaust(t, dtMs));
     updateExhaustPuffs(dtMs);
     updateTireTracks(dtMs);
 
@@ -1360,6 +1403,7 @@ window.FuseScene = (function () {
     setDepotFleetSize,
     showPowerlines,
     hidePowerlines,
+    setExhaustEnabled,
     get truckCount() { return trucks.children.length; },
   };
 })();

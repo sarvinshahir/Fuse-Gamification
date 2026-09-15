@@ -2,15 +2,18 @@
   const state = {
     companyName: '',
     province: '',
-    mediumCount: 0,
-    heavyCount: 0,
+    typeACount: 0,
+    typeBCount: 0,
+    typeCCount: 0,
+    typeDCount: 0,
     fleet_size: 0,
     centralDepot: null,
     landOwnership: null,
     leaseRemainingYears: null,
-    strataApproval: null,
+    // strataApproval: null,
     daily_km: 150,
     operating_hours: 9,
+    electrification_interest: 5,
     pct_ev: 0,
     annual_fuel_spend: 0
   };
@@ -46,20 +49,24 @@
   }
 
   function onEnterStep(n) {
+    FuseScene.setExhaustEnabled(n >= 6);
     switch (n) {
       case 0: FuseScene.enterSplash(); break;
       case 1: FuseScene.enterSplash(); break;
       case 2:
         FuseScene.enterCity();
         FuseScene.hideCity();
-        FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
+        FuseScene.showFleetGrid(fleetCounts());
         break;
       case 3: FuseScene.enterCity(); syncHoursTrucks(); break;
       case 4: FuseScene.enterCity(); break;
-      case 5: FuseScene.enterCity(); break;
-      case 6:
+      case 5:
         FuseScene.enterDepot(true);
         applyDepotState();
+        FuseScene.hidePowerlines();
+        break;
+      case 6:
+        FuseScene.enterDepot(true);
         FuseScene.hidePowerlines();
         break;
       case 7:
@@ -103,40 +110,69 @@
   });
   validateStep1();
 
-  const mediumCountEl = document.getElementById('mediumCount');
-  const mediumFillEl = document.getElementById('mediumFill');
-  const mediumValueEl = document.getElementById('mediumValue');
-  const heavyCountEl = document.getElementById('heavyCount');
-  const heavyFillEl = document.getElementById('heavyFill');
-  const heavyValueEl = document.getElementById('heavyValue');
+  const BUS_TYPES = ['A', 'B', 'C', 'D'];
+  const DOM_BUS_TYPES = ['C', 'D'];
+  const busTypeEls = {};
+  DOM_BUS_TYPES.forEach(type => {
+    busTypeEls[type] = {
+      count: document.getElementById(`type${type}Count`),
+      fill: document.getElementById(`type${type}Fill`),
+      value: document.getElementById(`type${type}Value`),
+    };
+  });
+
+  const typeABEl = document.getElementById('typeABCount');
+  const typeABFillEl = document.getElementById('typeABFill');
+  const typeABValueEl = document.getElementById('typeABValue');
+
+  function fleetCounts() {
+    return {
+      A: state.typeACount,
+      B: state.typeBCount,
+      C: state.typeCCount,
+      D: state.typeDCount,
+    };
+  }
 
   function updateFleetSizeUI() {
-    const medium = Number(mediumCountEl.value);
-    const heavy = Number(heavyCountEl.value);
-    state.mediumCount = medium;
-    state.heavyCount = heavy;
-    state.fleet_size = medium + heavy;
+    let total = 0;
 
-    mediumFillEl.style.left = '0';
-    mediumFillEl.style.width = (medium / Number(mediumCountEl.max)) * 100 + '%';
-    mediumValueEl.textContent = `${medium} vehicle${medium === 1 ? '' : 's'}`;
+    const abCount = Number(typeABEl.value);
+    state.typeACount = Math.ceil(abCount / 2);
+    state.typeBCount = Math.floor(abCount / 2);
+    total += abCount;
+    typeABFillEl.style.left = '0';
+    typeABFillEl.style.width = (abCount / Number(typeABEl.max)) * 100 + '%';
+    typeABValueEl.textContent = `${abCount} vehicle${abCount === 1 ? '' : 's'}`;
 
-    heavyFillEl.style.left = '0';
-    heavyFillEl.style.width = (heavy / Number(heavyCountEl.max)) * 100 + '%';
-    heavyValueEl.textContent = `${heavy} vehicle${heavy === 1 ? '' : 's'}`;
+    DOM_BUS_TYPES.forEach(type => {
+      const els = busTypeEls[type];
+      const count = Number(els.count.value);
+      state[`type${type}Count`] = count;
+      total += count;
 
-    nextButtonFor(2).disabled = (medium + heavy) === 0;
+      els.fill.style.left = '0';
+      els.fill.style.width = (count / Number(els.count.max)) * 100 + '%';
+      els.value.textContent = `${count} vehicle${count === 1 ? '' : 's'}`;
+    });
+    state.fleet_size = total;
+
+    nextButtonFor(2).disabled = total === 0;
+    updateFuelSavingsCallout();
   }
 
   function redrawFleetGrid() {
-    FuseScene.showFleetGrid(state.heavyCount, state.mediumCount);
-    FuseScene.setDepotFleetSize(state.heavyCount + state.mediumCount);
+    FuseScene.showFleetGrid(fleetCounts());
+    FuseScene.setDepotFleetSize(state.fleet_size);
   }
 
-  mediumCountEl.addEventListener('input', updateFleetSizeUI);
-  heavyCountEl.addEventListener('input', updateFleetSizeUI);
-  mediumCountEl.addEventListener("mouseup", redrawFleetGrid);
-  heavyCountEl.addEventListener("mouseup", redrawFleetGrid);
+  typeABEl.addEventListener('input', updateFleetSizeUI);
+  typeABEl.addEventListener('mouseup', redrawFleetGrid);
+  DOM_BUS_TYPES.forEach(type => {
+    const els = busTypeEls[type];
+    els.count.addEventListener('input', updateFleetSizeUI);
+    els.count.addEventListener('mouseup', redrawFleetGrid);
+  });
   updateFleetSizeUI();
   redrawFleetGrid();
 
@@ -159,14 +195,14 @@
 
   function applyDepotState() {
     const hasSelection = state.centralDepot !== null;
-    nextButtonFor(6).disabled = !hasSelection;
+    nextButtonFor(5).disabled = !hasSelection;
     depotSubQuestions.classList.toggle('open', hasSelection);
   }
 
   document.querySelectorAll('input[name="landOwnership"]').forEach(radio => {
     radio.addEventListener('change', () => {
       state.landOwnership = radio.value;
-      leaseYearsQuestion.hidden = radio.value !== 'lease';
+      leaseYearsQuestion.hidden = radio.value === 'own';
     });
   });
 
@@ -174,9 +210,9 @@
     state.leaseRemainingYears = e.target.value === '' ? null : Number(e.target.value);
   });
 
-  document.querySelectorAll('input[name="strataApproval"]').forEach(radio => {
-    radio.addEventListener('change', () => { state.strataApproval = radio.value === 'yes'; });
-  });
+  // document.querySelectorAll('input[name="strataApproval"]').forEach(radio => {
+  //   radio.addEventListener('change', () => { state.strataApproval = radio.value === 'yes'; });
+  // });
 
   const opsStartEl = document.getElementById('opsStart');
   const opsEndEl = document.getElementById('opsEnd');
@@ -245,19 +281,50 @@
     const digitsOnly = fuelSpendEl.value.replace(/[^\d]/g, '');
     if (digitsOnly !== fuelSpendEl.value) fuelSpendEl.value = digitsOnly;
     state.annual_fuel_spend = digitsOnly === '' ? 0 : Number(digitsOnly);
+    updateFuelSavingsCallout();
+  }
+
+  function updateFuelSavingsCallout() {
+    const totalSpend = state.annual_fuel_spend * state.fleet_size;
+
+    const fuelAmountEl = document.getElementById('fuelSavingsAmount');
+    if (fuelAmountEl) {
+      fuelAmountEl.textContent = formatCurrency(totalSpend);
+      fuelAmountEl.classList.toggle('negative', totalSpend < 0);
+    }
+
+    const interestSavings = totalSpend * (state.pct_ev / 100);
+    const interestAmountEl = document.getElementById('interestStepFuelSavingsAmount');
+    if (interestAmountEl) {
+      interestAmountEl.textContent = formatCurrency(interestSavings);
+      interestAmountEl.classList.toggle('negative', interestSavings < 0);
+    }
+
+    const interestHintEl = document.getElementById('interestHint');
+    if (interestHintEl) {
+      const electrifiedCount = Math.round(state.fleet_size * (state.pct_ev / 100));
+      interestHintEl.textContent = electrifiedCount > 0
+        ? `Electrifying ${electrifiedCount} busses cuts fuel spend directly.`
+        : `Swapping buses to electric cuts fuel spend directly.`;
+    }
   }
 
   fuelSpendEl.addEventListener('input', updateFuelSpendUI);
   updateFuelSpendUI();
 
   const VALUE_ASSUMPTIONS = {
-    heavyKwhPerKm: 1.8,
-    mediumKwhPerKm: 0.9,
+    typeAKwhPerKm: 0.6,
+    typeBKwhPerKm: 0.9,
+    typeCKwhPerKm: 1.4,
+    typeDKwhPerKm: 1.8,
     chargerKw: 40,
   };
 
+  // Picks the type with the most vehicles; ties favor the larger type (D > C > B > A).
   function dominantVehicleSize() {
-    return state.heavyCount >= state.mediumCount ? 'large' : 'medium';
+    return BUS_TYPES.reduce((best, type) =>
+      state[`type${type}Count`] >= state[`type${best}Count`] ? type : best
+    );
   }
 
   function dailyKmBucket(km) {
@@ -272,7 +339,7 @@
   async function fetchValueCalculation() {
     const requestId = ++calcRequestId;
     try {
-      const res = await fetch("http://localhost:8001/calculate", {
+      const res = await fetch("http://localhost:8000/calculate", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -301,15 +368,6 @@
     return `${formatCurrency(low)} – ${formatCurrency(high)}`;
   }
 
-  async function updateValueCallout(amountElId) {
-    const amountEl = document.getElementById(amountElId);
-    const result = await fetchValueCalculation();
-    if (!result) return;
-    if (!amountEl) return;
-    amountEl.textContent = formatCurrencyRange(result.total_benefit_low, result.total_benefit_high);
-    amountEl.classList.toggle('negative', result.total_benefit_low < 0);
-  }
-
   function v2gUptimeHoursFor(kwhPerKm) {
     const operatingHours = Math.max(0, state.operating_hours);
     const powerConsumed = state.daily_km * kwhPerKm;
@@ -320,20 +378,21 @@
   function pluralize(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
   function formatHours(h) { return `${(Math.round(h * 10) / 10)} hour${Math.round(h * 10) === 10 ? '' : 's'}`; }
 
-  const pct_evEl = document.getElementById('evPercent');
-  const evFillEl = document.getElementById('evFill');
-  const evValueEl = document.getElementById('evValue');
+  const interestEl = document.getElementById('electrificationInterest');
+  const interestFillEl = document.getElementById('interestFill');
+  const interestValueEl = document.getElementById('interestValue');
 
-  let evValueDebounceTimer = null;
+  function updateInterestUI() {
+    const val = Number(interestEl.value);
+    state.electrification_interest = val;
+    const min = Number(interestEl.min);
+    const max = Number(interestEl.max);
+    interestFillEl.style.left = '0';
+    interestFillEl.style.width = ((val - min) / (max - min)) * 100 + '%';
+    interestValueEl.textContent = `${val} / 10`;
 
-  function updateEvUI() {
-    const pct = Number(pct_evEl.value);
-    state.pct_ev = pct;
-    evFillEl.style.left = '0';
-    evFillEl.style.width = pct + '%';
-    evValueEl.textContent = `${pct}% electric`;
-    clearTimeout(evValueDebounceTimer);
-    evValueDebounceTimer = setTimeout(() => updateValueCallout('evStepValueAmount'), 250);
+    state.pct_ev = val * 10;
+    updateFuelSavingsCallout();
     syncEvTrucks();
   }
 
@@ -342,47 +401,51 @@
     FuseScene.SetEvFraction(state.pct_ev / 100);
   }
 
-  pct_evEl.addEventListener('input', updateEvUI);
-  updateEvUI();
+  interestEl.addEventListener('input', updateInterestUI);
+  updateInterestUI();
 
   async function renderSummary() {
     const amountEl = document.getElementById('valueAmount');
+    const calloutEl = document.getElementById('reviewValueCallout');
+    if (calloutEl) calloutEl.hidden = true;
     const result = await fetchValueCalculation();
     if (result && amountEl) {
       amountEl.textContent = formatCurrencyRange(result.total_benefit_low, result.total_benefit_high);
       amountEl.classList.toggle('negative', result.total_benefit_low < 0);
+      if (calloutEl) calloutEl.hidden = false;
     }
 
-    const totalVehicles = state.heavyCount + state.mediumCount;
-    const evHeavy = Math.round(state.heavyCount * (state.pct_ev / 100));
-    const evMedium = Math.round(state.mediumCount * (state.pct_ev / 100));
-    const totalEVs = evHeavy + evMedium;
+    const totalVehicles = state.fleet_size;
+    const evCounts = {};
+    let totalEVs = 0;
+    BUS_TYPES.forEach(type => {
+      const evCount = Math.round(state[`type${type}Count`] * (state.pct_ev / 100));
+      evCounts[type] = evCount;
+      totalEVs += evCount;
+    });
 
     const operatingHours = Math.max(0, state.operating_hours);
     const hoursAtDepot = Math.max(0, 24 - operatingHours);
 
-    const heavyUptime = v2gUptimeHoursFor(VALUE_ASSUMPTIONS.heavyKwhPerKm);
-    const mediumUptime = v2gUptimeHoursFor(VALUE_ASSUMPTIONS.mediumKwhPerKm);
+    const uptimeByType = {};
+    BUS_TYPES.forEach(type => {
+      uptimeByType[type] = v2gUptimeHoursFor(VALUE_ASSUMPTIONS[`type${type}KwhPerKm`]);
+    });
     const blendedUptime = totalEVs > 0
-      ? (evHeavy * heavyUptime + evMedium * mediumUptime) / totalEVs
+      ? BUS_TYPES.reduce((sum, type) => sum + evCounts[type] * uptimeByType[type], 0) / totalEVs
       : 0;
 
     const paragraphs = [];
 
-    paragraphs.push(
-      `${state.companyName || 'Your fleet'} runs <strong>${formatHour(state.operating_hours)}</strong> ` +
-      `hours a day. That leaves <strong>${formatHours(hoursAtDepot)}</strong> overnight when every vehicle is parked back ` +
-      `at the depot — downtime today that V2G turns into paid time.`
-    );
-
-    paragraphs.push(
-      `Across your <strong>${pluralize(totalVehicles, 'vehicle')}</strong> — ${pluralize(state.heavyCount, 'heavy duty vehicle')} ` +
-      `and ${pluralize(state.mediumCount, 'medium duty vehicle')} — moving <strong>${state.pct_ev}%</strong> to electric ` +
-      (totalEVs > 0
-        ? `puts <strong>${pluralize(totalEVs, 'EV')}</strong> on the road: ${pluralize(evHeavy, 'heavy duty')} and ` +
-          `${pluralize(evMedium, 'medium duty')}.`
-        : `hasn't put any EVs on the road yet — bump up the electrification slider to see the impact.`)
-    );
+    // paragraphs.push(
+    //   `Across your <strong>${pluralize(totalVehicles, 'vehicle')}</strong> — ` +
+    //   `${BUS_TYPES.map(type => pluralize(state[`type${type}Count`], `Type ${type} vehicle`)).join(', ')} — ` +
+    //   `moving <strong>${state.pct_ev}%</strong> to electric ` +
+    //   (totalEVs > 0
+    //     ? `puts <strong>${pluralize(totalEVs, 'EV')}</strong> on the road: ` +
+    //       `${BUS_TYPES.map(type => pluralize(evCounts[type], `Type ${type}`)).join(', ')}.`
+    //     : `hasn't put any EVs on the road yet — bump up the electrification slider to see the impact.`)
+    // );
 
     paragraphs.push(
       totalEVs > 0
@@ -438,7 +501,7 @@
     contactSaveStatusEl.className = 'contact-save-status';
     contactSaveStatusEl.textContent = 'Saving…';
     try {
-      const res = await fetch("http://localhost:8001/contact", {
+      const res = await fetch("http://localhost:8000/contact", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -471,7 +534,7 @@
     statusEl.textContent = 'Submitting…';
     let saved = false;
     try {
-      const res = await fetch("http://localhost:8001/submit", {
+      const res = await fetch("http://localhost:8000/submit", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
