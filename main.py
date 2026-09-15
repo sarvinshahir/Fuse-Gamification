@@ -596,6 +596,17 @@ def save_contact(data: ContactInfo):
     conn.close()
     return {"message": "Contact saved successfully"}
 
+@app.get("/reset-db")
+def reset_db():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS contacts")
+    c.execute("DROP TABLE IF EXISTS submissions")
+    conn.commit()
+    conn.close()
+    init_db()
+    return {"message": "Database reset successfully"}
+
 @app.get("/survey")
 def survey_page():
     return FileResponse("sarvin-frontend/index.html")
