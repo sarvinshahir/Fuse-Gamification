@@ -337,20 +337,6 @@
     chargerKw: 40,
   };
 
-  // Picks the type with the most vehicles; ties favor "large".
-  function dominantVehicleSize() {
-    return BUS_TYPES.reduce((best, type) =>
-      state[`${type}Count`] >= state[`${best}Count`] ? type : best
-    );
-  }
-
-  function dailyKmBucket(km) {
-    if (km < 50) return 'under_50';
-    if (km < 100) return '50_100';
-    if (km < 150) return '100_150';
-    return '150_plus';
-  }
-
   let calcRequestId = 0;
 
   async function fetchValueCalculation() {
@@ -361,10 +347,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: state.session_id,
-          fleet_size: state.fleet_size,
-          pct_ev: state.pct_ev,
-          vehicle_size: dominantVehicleSize(),
-          daily_km: dailyKmBucket(state.daily_km),
+          small_count: state.smallCount,
+          standard_count: state.largeCount,
+          daily_km: state.daily_km,
           morning_start: state.morning_start,
           morning_end: state.morning_end,
           afternoon_start: state.afternoon_start,
@@ -372,7 +357,6 @@
           available_5_9pm: !!state.depotEvening,
           central_depot: !!state.centralDepot,
           province: state.province,
-          annual_fuel_spend: state.annual_fuel_spend,
         }),
       });
       if (!res.ok) return null;
@@ -562,10 +546,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: state.session_id,
-          fleet_size: state.fleet_size,
-          pct_ev: state.pct_ev,
-          vehicle_size: dominantVehicleSize(),
-          daily_km: dailyKmBucket(state.daily_km),
+          small_count: state.smallCount,
+          standard_count: state.largeCount,
+          daily_km: state.daily_km,
           morning_start: state.morning_start,
           morning_end: state.morning_end,
           afternoon_start: state.afternoon_start,
@@ -573,7 +556,6 @@
           available_5_9pm: !!state.depotEvening,
           central_depot: !!state.centralDepot,
           province: state.province,
-          annual_fuel_spend: state.annual_fuel_spend,
         }),
       });
       const data = await res.json();
