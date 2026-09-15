@@ -59,6 +59,33 @@
     currentStep = n;
     updateProgress();
     onEnterStep(n);
+    saveStepProgress();
+  }
+
+  async function saveStepProgress() {
+    try {
+      await fetch("http://localhost:8000/save-step", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: state.session_id,
+          step: currentStep,
+          company_name: state.companyName || null,
+          province: state.province || null,
+          small_count: state.smallCount,
+          standard_count: state.largeCount,
+          daily_km: state.daily_km,
+          morning_start: state.morning_start,
+          morning_end: state.morning_end,
+          afternoon_start: state.afternoon_start,
+          afternoon_end: state.afternoon_end,
+          available_5_9pm: state.depotEvening,
+          central_depot: state.centralDepot,
+        }),
+      });
+    } catch (err) {
+      // best-effort save; don't block navigation on network errors
+    }
   }
 
   function onEnterStep(n) {
