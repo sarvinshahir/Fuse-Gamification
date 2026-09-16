@@ -984,11 +984,14 @@ window.FuseScene = (function () {
 
   // Builds the fleet grid from counts per bus type (e.g. {small, large}),
   // largest type first, in one combined grid.
+  const FLEET_TYPE_DRAW_MAX = 25;
+
   function showFleetGrid(counts) {
     [...trucks.children].forEach(t => trucks.remove(t));
     const queue = [];
     ['large', 'small'].forEach(type => {
-      for (let i = 0; i < (counts[type] || 0); i++) queue.push(type);
+      const n = Math.min(counts[type] || 0, FLEET_TYPE_DRAW_MAX);
+      for (let i = 0; i < n; i++) queue.push(type);
     });
     const count = queue.length;
     truckColumns = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)));

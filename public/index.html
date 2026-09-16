@@ -19,17 +19,15 @@
   <!-- STEP 0 : SPLASH -->
   <section class="step active" data-step="0">
     <div class="panel panel-card">
-      <div class="section-label">The Internet of Power</div>
-      <h1>Vehicle to Grid</h1>
+      <div class="section-label">V2G Fleet Revenue Calculator</div>
+      <h1>Your parked buses could be earning money</h1>
       <br>
-      <p>Vehicle to Grid (V2G) is a technology that allows electric vehicles to
-         return power to the grid.</p>
-      <p>If you are an owner or operator of a fleet of vehicles, V2G turns your
-         vehicles into assets that make money, even when they're parked.</p>
-    
+      <p>Answer 8 quick questions about your fleet and we'll estimate how much annual revenue your buses could generate through Vehicle-to-Grid technology — while also showing your fuel savings from going electric.</p>
       <br>
 
-      <button class="btn-primary" data-next>Let us show you how →</button>
+      <button class="btn-primary" data-next>Start My Estimate →</button>
+      <br><br>
+      <p style = "margin-left: 20px;"><i>Takes about 3 minutes</i></p>
     </div>
   </section>
 
@@ -51,28 +49,7 @@
           <option value="ON">Ontario</option>
           <option value="QC">Québec</option>
           <option value="NS">Nova Scotia</option>
-          
-          <!-- <option value="Abbotsford">Abbotsford</option>
-          <option value="Burnaby">Burnaby</option>
-          <option value="Campbell Rive">Campbell River</option>
-          <option value="Chilliwack">Chilliwack</option>
-          <option value="Coquitlam">Coquitlam</option>
-          <option value="Delta">Delta</option>
-          <option value="Kamloops">Kamloops</option>
-          <option value="Kelowna">Kelowna</option>
-          <option value="Langley">Langley</option>
-          <option value="Maple Ridge">Maple Ridge</option>
-          <option value="New Westminster">New Westminster</option>
-          <option value="North Vancouver">North Vancouver</option>
-          <option value="Penticton">Penticton</option>
-          <option value="Pitt Meadows">Pitt Meadows</option>
-          <option value="Port Coquitlam">Port Coquitlam</option>
-          <option value="Port Moody">Port Moody</option>
-          <option value="Richmond">Richmond</option>
-          <option value="Surrey">Surrey</option>
-          <option value="Vancouver">Vancouver</option>
-          <option value="Victoria">Victoria</option>
-          <option value="White Rock">White Rock</option> -->
+        
         </select>
       </div>
 
@@ -195,18 +172,26 @@
       <div class="section-label">Depot</div>
 
       <div class="question">
-        <label>Do you use a central depot for your fleet?</label>
-        <div class="checkbox-group" id="depotGroup">
-          <label><input type="checkbox" name="centralDepot" value="yes"> yes</label>
-          <label><input type="checkbox" name="centralDepot" value="no"> no</label>
+        <label>Are buses back at depot and available from 5:00 - 9:00pm?</label>
+        <div class="checkbox-group" id="depotEveningGroup">
+          <label><input type="checkbox" name="depotEvening" value="yes"> yes</label>
+          <label><input type="checkbox" name="depotEvening" value="no"> no</label>
         </div>
       </div>
 
       <div class="question">
-        <label>Are your busses at the depot between 5:00 - 9:00pm?</label>
-        <div class="checkbox-group" id="depotEveningGroup">
-          <label><input type="checkbox" name="depotEvening" value="yes"> yes</label>
-          <label><input type="checkbox" name="depotEvening" value="no"> no</label>
+        <label>Can buses recharge midday between routes?</label>
+        <div class="checkbox-group" id="depotMiddayGroup">
+          <label><input type="checkbox" name="depotMidday" value="yes"> yes</label>
+          <label><input type="checkbox" name="depotMidday" value="no"> no</label>
+        </div>
+      </div>
+
+      <div class="question">
+        <label>Do you have a central depot?</label>
+        <div class="checkbox-group" id="depotGroup">
+          <label><input type="checkbox" name="centralDepot" value="yes"> yes</label>
+          <label><input type="checkbox" name="centralDepot" value="no"> no</label>
         </div>
       </div>
 

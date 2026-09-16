@@ -18,6 +18,7 @@
     fleet_size: 0,
     centralDepot: null,
     depotEvening: null,
+    middayAvailable: null,
     landOwnership: null,
     leaseRemainingYears: null,
     // strataApproval: null,
@@ -80,6 +81,7 @@
           afternoon_start: state.afternoon_start,
           afternoon_end: state.afternoon_end,
           available_5_9pm: state.depotEvening,
+          midday_available: state.middayAvailable,
           central_depot: state.centralDepot,
         }),
       });
@@ -200,6 +202,7 @@
 
   const depotCheckboxes = document.querySelectorAll('input[name="centralDepot"]');
   const depotEveningCheckboxes = document.querySelectorAll('input[name="depotEvening"]');
+  const depotMiddayCheckboxes = document.querySelectorAll('input[name="depotMidday"]');
   const depotSubQuestions = document.getElementById('depotSubQuestions');
   const leaseYearsQuestion = document.getElementById('leaseYearsQuestion');
 
@@ -229,8 +232,21 @@
     });
   });
 
+  depotMiddayCheckboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        depotMiddayCheckboxes.forEach(other => { if (other !== cb) other.checked = false; });
+        state.middayAvailable = cb.value === 'yes';
+      } else {
+        const anyChecked = Array.from(depotMiddayCheckboxes).some(c => c.checked);
+        if (!anyChecked) state.middayAvailable = null;
+      }
+      applyDepotState();
+    });
+  });
+
   function applyDepotState() {
-    const hasSelection = state.centralDepot !== null && state.depotEvening !== null;
+    const hasSelection = state.centralDepot !== null && state.depotEvening !== null && state.middayAvailable !== null;
     nextButtonFor(5).disabled = !hasSelection;
     depotSubQuestions.classList.toggle('open', state.centralDepot !== null);
   }
@@ -382,6 +398,7 @@
           afternoon_start: state.afternoon_start,
           afternoon_end: state.afternoon_end,
           available_5_9pm: !!state.depotEvening,
+          midday_available: !!state.middayAvailable,
           central_depot: !!state.centralDepot,
           province: state.province,
         }),
@@ -581,6 +598,7 @@
           afternoon_start: state.afternoon_start,
           afternoon_end: state.afternoon_end,
           available_5_9pm: !!state.depotEvening,
+          midday_available: !!state.middayAvailable,
           central_depot: !!state.centralDepot,
           province: state.province,
         }),
