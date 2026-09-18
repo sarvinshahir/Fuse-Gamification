@@ -607,6 +607,10 @@ def reset_db():
     init_db()
     return {"message": "Database reset successfully"}
 
+@app.get("/milan")
+def milan_survey():
+    return FileResponse("public/index.html")
+
 @app.get("/survey")
 def survey_page():
     return FileResponse("sarvin-frontend/index.html")
