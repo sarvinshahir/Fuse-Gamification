@@ -1,7 +1,7 @@
 (function () {
   function getOrCreateSessionId() {
     const key = 'fuseSessionId';
-    let id = sessionStorage.getItem(key);
+    let id = null; // always fresh session
     if (!id) {
       id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
       sessionStorage.setItem(key, id);
