@@ -28,7 +28,7 @@
     afternoon_start: 14,
     afternoon_end: 16.5,
     electrification_interest: 5,
-    pct_ev: 0,
+    pct_ev: 100,
     annual_fuel_spend: 0
   };
 
@@ -505,8 +505,8 @@
               `<strong>${formatHours(blendedUptime)}</strong> a day free to return power to the grid after its own ` +
               `recharge — worth an estimated <strong>${formatCurrencyRange(result.v2g_revenue_low, result.v2g_revenue_high)}</strong> ` +
               `a year across your fleet` +
-              (result.diesel_savings > 0
-                ? `, including <strong>${formatCurrency(result.diesel_savings)}</strong> in fuel spend avoided by going electric.`
+              (result.net_fuel_savings > 0
+                ? `, including <strong>${formatCurrency(result.net_fuel_savings)}</strong> in fuel spend avoided by going electric.`
                 : `.`)
             : `Crunching the numbers on your V2G value…`)
         : `Once some of your fleet goes electric, this is where you'll see how much daily driving distance leaves ` +
