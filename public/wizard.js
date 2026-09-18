@@ -347,8 +347,8 @@
   updateDistanceUI();
   updateCity();
 
-  function updateFuelSavingsCallout() {
-    const totalSpend = state.annual_fuel_spend * state.fleet_size;
+function updateFuelSavingsCallout() {
+    const totalSpend = state.fleet_size * state.daily_km * 0.40 * 2.30 * 350;
 
     const fuelAmountEl = document.getElementById('fuelSavingsAmount');
     if (fuelAmountEl) {
