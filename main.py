@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional
 import sqlite3
 import os
+from fastapi.staticfiles import StaticFiles
 
 try:
     import psycopg2
@@ -607,10 +608,6 @@ def reset_db():
     init_db()
     return {"message": "Database reset successfully"}
 
-@app.get("/milan")
-def milan_survey():
-    return FileResponse("public/index.html")
-
 @app.get("/survey")
 def survey_page():
     return FileResponse("sarvin-frontend/index.html")
@@ -622,3 +619,5 @@ def test_page():
 @app.get("/")
 def root():
     return {"message": "Fuse Gamification API is running"}
+
+app.mount("/v2g", StaticFiles(directory="public", html=True), name="public")
