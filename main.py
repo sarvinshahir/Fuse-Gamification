@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 import sqlite3
 import os
-from fastapi.staticfiles import StaticFiles
 
 try:
     import psycopg2
@@ -25,26 +25,40 @@ app.add_middleware(
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-SMALL_BATTERY_KWH = 175         # Microbird G5
-STANDARD_BATTERY_KWH = 255      # Lion C, Lion D, Blue Bird Vision, All American
-MIN_SOC = 0.20
-CHARGER_KW = 40
-V2G_WINDOW_HOURS = 4.0          # 5pm–9pm
-ANNUAL_DAYS = 350
+# Bus battery capacities — provisional, pending manufacturer validation
+BATTERY_KWH = {
+    "mini":     80,    # Mini Bus 10–24 seats — TODO validate
+    "midsize":  125,   # Mid-Size 25–47 seats — TODO validate
+    "fullsize": 185,   # Full-Size 48–71 seats — TODO validate
+}
 
-ENERGY_PER_KM = 1.3             # TODO validate with Lynch Excel from Rob
+# Energy consumption per km — provisional, pending real-world validation
+ENERGY_PER_KM = {
+    "mini":     0.9,   # kWh/km — TODO validate
+    "midsize":  1.3,   # kWh/km — TODO validate
+    "fullsize": 1.8,   # kWh/km — TODO validate
+}
 
-DIESEL_L_PER_KM = 0.40          # TODO validate with Rob
-DIESEL_PRICE_PER_L = 2.30       # TODO validate — BC average
+MIN_SOC = 0.20              # 20% minimum state of charge
+CHARGER_KW = 40             # Tellus Power charger — confirmed from Lynch pilot
+CHARGING_EFFICIENCY = 0.90  # 90% charging efficiency — TODO validate
+V2G_WINDOW_END = 21         # 9pm in 24h
+V2G_WINDOW_START = 17       # 5pm in 24h
+ANNUAL_DAYS = 350            # Confirmed by Rob
 
-PROVISIONAL_V2G_RATE = 0.12     # $/kWh — placeholder, methodology not confirmed
+# Provisional V2G rate — compensation methodology not confirmed with BC Hydro
+PROVISIONAL_V2G_RATE = 0.12
 
 UTILITY_RATES = {
     "BC": 0.12,
     "ON": 0.13,
     "QC": 0.07,
-    "NS": 0.18
+    "NS": 0.18,
 }
+
+# Diesel constants — TODO validate with Rob
+DIESEL_L_PER_KM = 0.40
+DIESEL_PRICE_PER_L = 2.30
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -53,7 +67,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 def get_db():
     if DATABASE_URL:
         if psycopg2 is None:
-            raise RuntimeError("DATABASE_URL is set but psycopg2 is unavailable — check requirements.txt")
+            raise RuntimeError("DATABASE_URL is set but psycopg2 is unavailable")
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     else:
         conn = sqlite3.connect("gamification.db")
@@ -73,8 +87,9 @@ def init_db():
                 last_completed_step INTEGER DEFAULT 0,
                 company_name TEXT,
                 province TEXT,
-                small_count INTEGER,
-                standard_count INTEGER,
+                mini_count INTEGER DEFAULT 0,
+                midsize_count INTEGER DEFAULT 0,
+                fullsize_count INTEGER DEFAULT 0,
                 fleet_size INTEGER,
                 daily_km REAL,
                 morning_start REAL,
@@ -85,11 +100,13 @@ def init_db():
                 midday_available INTEGER,
                 other_available_times TEXT,
                 central_depot INTEGER,
-                avg_battery_kwh REAL,
-                available_energy_at_5pm_kwh REAL,
-                full_recharge_time_hrs REAL,
-                v2g_kwh_per_bus_per_day REAL,
-                annual_v2g_energy_kwh REAL,
+                mini_v2g_kwh REAL,
+                midsize_v2g_kwh REAL,
+                fullsize_v2g_kwh REAL,
+                mini_flagged BOOLEAN,
+                midsize_flagged BOOLEAN,
+                fullsize_flagged BOOLEAN,
+                total_v2g_energy_kwh REAL,
                 v2g_revenue_low REAL,
                 v2g_revenue_high REAL,
                 annual_diesel_cost REAL,
@@ -125,8 +142,9 @@ def init_db():
                 last_completed_step INTEGER DEFAULT 0,
                 company_name TEXT,
                 province TEXT,
-                small_count INTEGER,
-                standard_count INTEGER,
+                mini_count INTEGER DEFAULT 0,
+                midsize_count INTEGER DEFAULT 0,
+                fullsize_count INTEGER DEFAULT 0,
                 fleet_size INTEGER,
                 daily_km REAL,
                 morning_start REAL,
@@ -137,11 +155,13 @@ def init_db():
                 midday_available INTEGER,
                 other_available_times TEXT,
                 central_depot INTEGER,
-                avg_battery_kwh REAL,
-                available_energy_at_5pm_kwh REAL,
-                full_recharge_time_hrs REAL,
-                v2g_kwh_per_bus_per_day REAL,
-                annual_v2g_energy_kwh REAL,
+                mini_v2g_kwh REAL,
+                midsize_v2g_kwh REAL,
+                fullsize_v2g_kwh REAL,
+                mini_flagged BOOLEAN,
+                midsize_flagged BOOLEAN,
+                fullsize_flagged BOOLEAN,
+                total_v2g_energy_kwh REAL,
                 v2g_revenue_low REAL,
                 v2g_revenue_high REAL,
                 annual_diesel_cost REAL,
@@ -181,8 +201,9 @@ class PartialSubmission(BaseModel):
     step: int
     company_name: Optional[str] = None
     province: Optional[str] = None
-    small_count: Optional[int] = None
-    standard_count: Optional[int] = None
+    mini_count: Optional[int] = None
+    midsize_count: Optional[int] = None
+    fullsize_count: Optional[int] = None
     daily_km: Optional[float] = None
     morning_start: Optional[float] = None
     morning_end: Optional[float] = None
@@ -195,8 +216,9 @@ class PartialSubmission(BaseModel):
 
 class SurveyInput(BaseModel):
     session_id: str
-    small_count: int = 0
-    standard_count: int = 0
+    mini_count: int = 0
+    midsize_count: int = 0
+    fullsize_count: int = 0
     daily_km: float
     morning_start: float
     morning_end: float
@@ -227,125 +249,180 @@ def optional_bool_to_int(val: Optional[bool]) -> Optional[int]:
         return None
     return int(val)
 
-# ── Value Calculation ─────────────────────────────────────────────────────────
+# ── Per-category V2G calculation ──────────────────────────────────────────────
 
-def calculate_v2g_revenue(data: SurveyInput):
+def calculate_bus_v2g(
+    category: str,
+    daily_km: float,
+    morning_end: float,
+    afternoon_start: Optional[float],
+    afternoon_end: Optional[float],
+    midday_available: bool,
+    available_5_9pm: bool,
+) -> dict:
 
-    # 1. Fleet size and weighted average battery
-    fleet_size = data.small_count + data.standard_count
-    num_evs = fleet_size
+    capacity = BATTERY_KWH[category]
+    reserve = capacity * MIN_SOC
+    consumption = ENERGY_PER_KM[category]
 
-    if fleet_size == 0:
-        return {
-            "error": "Fleet size must be greater than 0",
-            "num_evs": 0,
-            "usable_battery_kwh": 0,
-            "available_energy_at_5pm_kwh": 0,
-            "full_recharge_time_hrs": 0,
-            "driving_recovery_hrs": 0,
-            "v2g_kwh_per_bus_per_day": 0,
-            "annual_v2g_energy_kwh": 0,
-            "v2g_revenue_low": 0,
-            "v2g_revenue_high": 0,
-            "annual_diesel_cost": 0,
-            "annual_electricity_cost": 0,
-            "net_fuel_savings": 0,
-            "total_benefit_low": 0,
-            "total_benefit_high": 0,
-        }
+    has_afternoon = afternoon_start is not None and afternoon_end is not None
 
-    avg_battery = (
-        (data.small_count * SMALL_BATTERY_KWH +
-         data.standard_count * STANDARD_BATTERY_KWH) / fleet_size
-    )
-    usable_battery = avg_battery * (1 - MIN_SOC)
-    electricity_rate = UTILITY_RATES.get(data.province, 0.12)
-
-    # 2. Energy consumed on routes
-    # TODO: validate 50/50 split with Lynch route spreadsheet
-    has_afternoon_route = (
-        data.afternoon_start is not None and
-        data.afternoon_end is not None
-    )
-
-    if has_afternoon_route:
-        morning_energy = (data.daily_km / 2) * ENERGY_PER_KM
-        afternoon_energy = (data.daily_km / 2) * ENERGY_PER_KM
+    if has_afternoon:
+        morning_energy = (daily_km / 2) * consumption
+        afternoon_energy = (daily_km / 2) * consumption
     else:
-        morning_energy = data.daily_km * ENERGY_PER_KM
+        morning_energy = daily_km * consumption
         afternoon_energy = 0.0
 
-    total_energy_per_day = morning_energy + afternoon_energy
+    # Start fully charged
+    after_morning = capacity - morning_energy
+    morning_route_flag = after_morning < reserve
 
-    # 3. SOC sequence through the day
-    energy_after_morning = max(0.0, usable_battery - morning_energy)
-
-    energy_before_afternoon = (
-        usable_battery
-        if data.midday_available and has_afternoon_route
-        else energy_after_morning
-    )
-
-    available_energy_at_5pm_kwh = max(
-        0.0,
-        energy_before_afternoon - afternoon_energy
-    )
-
-    # 4. Recharge times
-    full_recharge_time_hrs = usable_battery / CHARGER_KW
-    driving_recovery_hrs = (usable_battery - available_energy_at_5pm_kwh) / CHARGER_KW
-
-    # 5. V2G energy in 5–9pm window
-    if data.available_5_9pm:
-        v2g_kwh_per_bus = min(
-            V2G_WINDOW_HOURS * CHARGER_KW,
-            available_energy_at_5pm_kwh
+    # Midday charging
+    if has_afternoon and midday_available:
+        charging_hours = max(0.0, afternoon_start - morning_end)
+        energy_added = min(
+            charging_hours * CHARGER_KW * CHARGING_EFFICIENCY,
+            max(0.0, capacity - after_morning)
         )
     else:
-        v2g_kwh_per_bus = 0.0
+        energy_added = 0.0
 
-    # 6. Annual V2G energy potential
-    annual_v2g_energy_kwh = num_evs * v2g_kwh_per_bus * ANNUAL_DAYS
-    annual_v2g_revenue = annual_v2g_energy_kwh * PROVISIONAL_V2G_RATE
+    before_afternoon = min(capacity, after_morning + energy_added)
+    after_afternoon = before_afternoon - afternoon_energy
 
-    # 7. Fuel savings — calculated not asked
-    # TODO: validate DIESEL_L_PER_KM and DIESEL_PRICE_PER_L with Rob
+    route_flag = morning_route_flag or (after_afternoon < reserve)
+
+    # Energy available for V2G — must exclude the 20% reserve
+    available_for_v2g = max(0.0, after_afternoon - reserve)
+
+    # V2G window — account for actual return time
+    if has_afternoon and afternoon_end is not None:
+        v2g_hours = max(0.0, V2G_WINDOW_END - max(V2G_WINDOW_START, afternoon_end))
+    else:
+        v2g_hours = V2G_WINDOW_END - V2G_WINDOW_START  # full 4 hours
+
+    if available_5_9pm and not route_flag:
+        v2g_kwh = min(available_for_v2g, CHARGER_KW * v2g_hours)
+    else:
+        v2g_kwh = 0.0
+
+    return {
+        "battery_kwh": capacity,
+        "reserve_kwh": round(reserve, 2),
+        "morning_energy_kwh": round(morning_energy, 2),
+        "midday_energy_added_kwh": round(energy_added, 2),
+        "energy_at_5pm_kwh": round(after_afternoon, 2),
+        "available_for_v2g_kwh": round(available_for_v2g, 2),
+        "v2g_hours": round(v2g_hours, 2),
+        "v2g_kwh": round(v2g_kwh, 2),
+        "route_flagged": route_flag,
+        "no_v2g_available": v2g_kwh == 0,
+    }
+
+# ── Fleet-level calculation ───────────────────────────────────────────────────
+
+def calculate_v2g_revenue(data: SurveyInput) -> dict:
+
+    fleet_size = data.mini_count + data.midsize_count + data.fullsize_count
+    electricity_rate = UTILITY_RATES.get(data.province, 0.12)
+
+    if fleet_size == 0:
+        return {"error": "Fleet size must be greater than 0"}
+
+    # Calculate per category
+    categories = {
+        "mini":     data.mini_count,
+        "midsize":  data.midsize_count,
+        "fullsize": data.fullsize_count,
+    }
+
+    per_category = {}
+    total_v2g_energy_kwh = 0.0
+    total_electricity_kwh = 0.0
+
+    for cat, count in categories.items():
+        if count == 0:
+            per_category[cat] = {
+                "count": 0,
+                "v2g_kwh_per_bus": 0,
+                "annual_v2g_energy_kwh": 0,
+                "annual_v2g_revenue_low": 0,
+                "annual_v2g_revenue_high": 0,
+                "route_flagged": False,
+                "no_v2g_available": True,
+            }
+            continue
+
+        result = calculate_bus_v2g(
+            category=cat,
+            daily_km=data.daily_km,
+            morning_end=data.morning_end,
+            afternoon_start=data.afternoon_start,
+            afternoon_end=data.afternoon_end,
+            midday_available=data.midday_available,
+            available_5_9pm=data.available_5_9pm,
+        )
+
+        annual_v2g_energy = count * result["v2g_kwh"] * ANNUAL_DAYS
+        annual_v2g_revenue = annual_v2g_energy * PROVISIONAL_V2G_RATE
+        total_v2g_energy_kwh += annual_v2g_energy
+
+        # Electricity cost per category
+        consumption = ENERGY_PER_KM[cat]
+        has_afternoon = data.afternoon_start is not None and data.afternoon_end is not None
+        daily_energy = data.daily_km * consumption
+        total_electricity_kwh += count * daily_energy * ANNUAL_DAYS
+
+        per_category[cat] = {
+            "count": count,
+            "battery_kwh": result["battery_kwh"],
+            "reserve_kwh": result["reserve_kwh"],
+            "morning_energy_kwh": result["morning_energy_kwh"],
+            "midday_energy_added_kwh": result["midday_energy_added_kwh"],
+            "energy_at_5pm_kwh": result["energy_at_5pm_kwh"],
+            "available_for_v2g_kwh": result["available_for_v2g_kwh"],
+            "v2g_hours": result["v2g_hours"],
+            "v2g_kwh_per_bus": result["v2g_kwh"],
+            "annual_v2g_energy_kwh": round(annual_v2g_energy),
+            "annual_v2g_revenue_low": round(annual_v2g_revenue * 0.7),
+            "annual_v2g_revenue_high": round(annual_v2g_revenue * 1.3),
+            "route_flagged": result["route_flagged"],
+            "no_v2g_available": result["no_v2g_available"],
+        }
+
+    # Fleet totals
+    total_v2g_revenue = total_v2g_energy_kwh * PROVISIONAL_V2G_RATE
+
+    # Diesel savings
     annual_diesel_cost = (
         fleet_size * data.daily_km *
         DIESEL_L_PER_KM * DIESEL_PRICE_PER_L * ANNUAL_DAYS
     )
-    annual_electricity_cost = (
-        fleet_size * total_energy_per_day *
-        electricity_rate * ANNUAL_DAYS
-    )
+    annual_electricity_cost = total_electricity_kwh * electricity_rate
     net_fuel_savings = max(0, annual_diesel_cost - annual_electricity_cost)
 
-    # 8. Total benefit ±30%
-    total_benefit = annual_v2g_revenue + net_fuel_savings
+    total_benefit = total_v2g_revenue + net_fuel_savings
 
     return {
-        "num_evs": num_evs,
         "fleet_size": fleet_size,
-        "avg_battery_kwh": round(avg_battery, 1),
-        "usable_battery_kwh": round(usable_battery, 1),
-        "available_energy_at_5pm_kwh": round(available_energy_at_5pm_kwh, 1),
-        "full_recharge_time_hrs": round(full_recharge_time_hrs, 1),
-        "driving_recovery_hrs": round(driving_recovery_hrs, 1),
-        "v2g_kwh_per_bus_per_day": round(v2g_kwh_per_bus, 1),
-        "annual_v2g_energy_kwh": round(annual_v2g_energy_kwh),
-        "v2g_revenue_low": round(annual_v2g_revenue * 0.7),
-        "v2g_revenue_high": round(annual_v2g_revenue * 1.3),
+        "per_category": per_category,
+        "total_v2g_energy_kwh": round(total_v2g_energy_kwh),
+        "v2g_revenue_low": round(total_v2g_revenue * 0.7),
+        "v2g_revenue_high": round(total_v2g_revenue * 1.3),
         "annual_diesel_cost": round(annual_diesel_cost),
         "annual_electricity_cost": round(annual_electricity_cost),
         "net_fuel_savings": round(net_fuel_savings),
         "total_benefit_low": round(total_benefit * 0.7),
         "total_benefit_high": round(total_benefit * 1.3),
         "assumptions": {
-            "morning_afternoon_split": "50/50 — TODO validate with Lynch routes",
+            "battery_kwh_validated": False,
+            "energy_per_km_validated": False,
             "v2g_rate_provisional": True,
             "diesel_price_validated": False,
             "diesel_consumption_validated": False,
-            "energy_per_km_validated": False
+            "charging_efficiency": CHARGING_EFFICIENCY,
+            "annual_days": ANNUAL_DAYS,
         }
     }
 
@@ -374,8 +451,9 @@ def save_step(data: PartialSubmission):
                 last_completed_step = {ph},
                 company_name = COALESCE({ph}, company_name),
                 province = COALESCE({ph}, province),
-                small_count = COALESCE({ph}, small_count),
-                standard_count = COALESCE({ph}, standard_count),
+                mini_count = COALESCE({ph}, mini_count),
+                midsize_count = COALESCE({ph}, midsize_count),
+                fullsize_count = COALESCE({ph}, fullsize_count),
                 daily_km = COALESCE({ph}, daily_km),
                 morning_start = COALESCE({ph}, morning_start),
                 morning_end = COALESCE({ph}, morning_end),
@@ -390,7 +468,7 @@ def save_step(data: PartialSubmission):
         """, (
             data.step,
             data.company_name, data.province,
-            data.small_count, data.standard_count,
+            data.mini_count, data.midsize_count, data.fullsize_count,
             data.daily_km,
             data.morning_start, data.morning_end,
             data.afternoon_start, data.afternoon_end,
@@ -406,19 +484,19 @@ def save_step(data: PartialSubmission):
             c.execute("""
                 INSERT INTO submissions (
                     session_id, status, last_completed_step,
-                    company_name, province, small_count, standard_count,
+                    company_name, province,
+                    mini_count, midsize_count, fullsize_count,
                     daily_km, morning_start, morning_end,
                     afternoon_start, afternoon_end,
                     available_5_9pm, midday_available,
                     other_available_times, central_depot
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
                 data.session_id, 'incomplete', data.step,
                 data.company_name, data.province,
-                data.small_count, data.standard_count,
-                data.daily_km,
-                data.morning_start, data.morning_end,
+                data.mini_count, data.midsize_count, data.fullsize_count,
+                data.daily_km, data.morning_start, data.morning_end,
                 data.afternoon_start, data.afternoon_end,
                 available_5_9pm, midday_available,
                 data.other_available_times, central_depot
@@ -428,18 +506,18 @@ def save_step(data: PartialSubmission):
             c.execute("""
                 INSERT INTO submissions (
                     session_id, status, last_completed_step,
-                    company_name, province, small_count, standard_count,
+                    company_name, province,
+                    mini_count, midsize_count, fullsize_count,
                     daily_km, morning_start, morning_end,
                     afternoon_start, afternoon_end,
                     available_5_9pm, midday_available,
                     other_available_times, central_depot
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 data.session_id, 'incomplete', data.step,
                 data.company_name, data.province,
-                data.small_count, data.standard_count,
-                data.daily_km,
-                data.morning_start, data.morning_end,
+                data.mini_count, data.midsize_count, data.fullsize_count,
+                data.daily_km, data.morning_start, data.morning_end,
                 data.afternoon_start, data.afternoon_end,
                 available_5_9pm, midday_available,
                 data.other_available_times, central_depot
@@ -457,7 +535,7 @@ def calculate(data: SurveyInput):
 @app.post("/submit")
 def submit(data: SurveyInput):
     result = calculate_v2g_revenue(data)
-    fleet_size = data.small_count + data.standard_count
+    fleet_size = data.mini_count + data.midsize_count + data.fullsize_count
     conn = get_db()
     c = conn.cursor()
 
@@ -469,16 +547,22 @@ def submit(data: SurveyInput):
     )
     existing = c.fetchone()
 
+    mini = result["per_category"].get("mini", {})
+    midsize = result["per_category"].get("midsize", {})
+    fullsize = result["per_category"].get("fullsize", {})
+
     if existing:
         c.execute(f"""
             UPDATE submissions SET
                 status = {ph},
                 fleet_size = {ph},
-                avg_battery_kwh = {ph},
-                available_energy_at_5pm_kwh = {ph},
-                full_recharge_time_hrs = {ph},
-                v2g_kwh_per_bus_per_day = {ph},
-                annual_v2g_energy_kwh = {ph},
+                mini_v2g_kwh = {ph},
+                midsize_v2g_kwh = {ph},
+                fullsize_v2g_kwh = {ph},
+                mini_flagged = {ph},
+                midsize_flagged = {ph},
+                fullsize_flagged = {ph},
+                total_v2g_energy_kwh = {ph},
                 v2g_revenue_low = {ph},
                 v2g_revenue_high = {ph},
                 annual_diesel_cost = {ph},
@@ -489,13 +573,14 @@ def submit(data: SurveyInput):
                 updated_at = CURRENT_TIMESTAMP
             WHERE session_id = {ph}
         """, (
-            'completed',
-            fleet_size,
-            result["avg_battery_kwh"],
-            result["available_energy_at_5pm_kwh"],
-            result["full_recharge_time_hrs"],
-            result["v2g_kwh_per_bus_per_day"],
-            result["annual_v2g_energy_kwh"],
+            'completed', fleet_size,
+            mini.get("v2g_kwh_per_bus", 0),
+            midsize.get("v2g_kwh_per_bus", 0),
+            fullsize.get("v2g_kwh_per_bus", 0),
+            mini.get("route_flagged", False),
+            midsize.get("route_flagged", False),
+            fullsize.get("route_flagged", False),
+            result["total_v2g_energy_kwh"],
             result["v2g_revenue_low"],
             result["v2g_revenue_high"],
             result["annual_diesel_cost"],
@@ -511,27 +596,29 @@ def submit(data: SurveyInput):
             c.execute("""
                 INSERT INTO submissions (
                     session_id, status, last_completed_step,
-                    small_count, standard_count, fleet_size,
+                    mini_count, midsize_count, fullsize_count, fleet_size,
                     daily_km, province,
                     available_5_9pm, midday_available, central_depot,
-                    avg_battery_kwh, available_energy_at_5pm_kwh,
-                    full_recharge_time_hrs, v2g_kwh_per_bus_per_day,
-                    annual_v2g_energy_kwh, v2g_revenue_low, v2g_revenue_high,
+                    mini_v2g_kwh, midsize_v2g_kwh, fullsize_v2g_kwh,
+                    mini_flagged, midsize_flagged, fullsize_flagged,
+                    total_v2g_energy_kwh,
+                    v2g_revenue_low, v2g_revenue_high,
                     annual_diesel_cost, annual_electricity_cost,
                     net_fuel_savings, total_benefit_low, total_benefit_high
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
                 data.session_id, 'completed', 99,
-                data.small_count, data.standard_count, fleet_size,
+                data.mini_count, data.midsize_count, data.fullsize_count, fleet_size,
                 data.daily_km, data.province,
-                int(data.available_5_9pm), int(data.midday_available),
-                int(data.central_depot),
-                result["avg_battery_kwh"],
-                result["available_energy_at_5pm_kwh"],
-                result["full_recharge_time_hrs"],
-                result["v2g_kwh_per_bus_per_day"],
-                result["annual_v2g_energy_kwh"],
+                int(data.available_5_9pm), int(data.midday_available), int(data.central_depot),
+                mini.get("v2g_kwh_per_bus", 0),
+                midsize.get("v2g_kwh_per_bus", 0),
+                fullsize.get("v2g_kwh_per_bus", 0),
+                mini.get("route_flagged", False),
+                midsize.get("route_flagged", False),
+                fullsize.get("route_flagged", False),
+                result["total_v2g_energy_kwh"],
                 result["v2g_revenue_low"], result["v2g_revenue_high"],
                 result["annual_diesel_cost"], result["annual_electricity_cost"],
                 result["net_fuel_savings"],
@@ -542,26 +629,28 @@ def submit(data: SurveyInput):
             c.execute("""
                 INSERT INTO submissions (
                     session_id, status, last_completed_step,
-                    small_count, standard_count, fleet_size,
+                    mini_count, midsize_count, fullsize_count, fleet_size,
                     daily_km, province,
                     available_5_9pm, midday_available, central_depot,
-                    avg_battery_kwh, available_energy_at_5pm_kwh,
-                    full_recharge_time_hrs, v2g_kwh_per_bus_per_day,
-                    annual_v2g_energy_kwh, v2g_revenue_low, v2g_revenue_high,
+                    mini_v2g_kwh, midsize_v2g_kwh, fullsize_v2g_kwh,
+                    mini_flagged, midsize_flagged, fullsize_flagged,
+                    total_v2g_energy_kwh,
+                    v2g_revenue_low, v2g_revenue_high,
                     annual_diesel_cost, annual_electricity_cost,
                     net_fuel_savings, total_benefit_low, total_benefit_high
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 data.session_id, 'completed', 99,
-                data.small_count, data.standard_count, fleet_size,
+                data.mini_count, data.midsize_count, data.fullsize_count, fleet_size,
                 data.daily_km, data.province,
-                int(data.available_5_9pm), int(data.midday_available),
-                int(data.central_depot),
-                result["avg_battery_kwh"],
-                result["available_energy_at_5pm_kwh"],
-                result["full_recharge_time_hrs"],
-                result["v2g_kwh_per_bus_per_day"],
-                result["annual_v2g_energy_kwh"],
+                int(data.available_5_9pm), int(data.midday_available), int(data.central_depot),
+                mini.get("v2g_kwh_per_bus", 0),
+                midsize.get("v2g_kwh_per_bus", 0),
+                fullsize.get("v2g_kwh_per_bus", 0),
+                mini.get("route_flagged", False),
+                midsize.get("route_flagged", False),
+                fullsize.get("route_flagged", False),
+                result["total_v2g_energy_kwh"],
                 result["v2g_revenue_low"], result["v2g_revenue_high"],
                 result["annual_diesel_cost"], result["annual_electricity_cost"],
                 result["net_fuel_savings"],
@@ -599,14 +688,19 @@ def save_contact(data: ContactInfo):
 
 @app.get("/reset-db")
 def reset_db():
+    """One-time migration endpoint — REMOVE AFTER USE"""
     conn = get_db()
     c = conn.cursor()
-    c.execute("DROP TABLE IF EXISTS contacts")
-    c.execute("DROP TABLE IF EXISTS submissions")
+    if DATABASE_URL and psycopg2:
+        c.execute("DROP TABLE IF EXISTS contacts")
+        c.execute("DROP TABLE IF EXISTS submissions")
+    else:
+        c.execute("DROP TABLE IF EXISTS contacts")
+        c.execute("DROP TABLE IF EXISTS submissions")
     conn.commit()
     conn.close()
     init_db()
-    return {"message": "Database reset successfully"}
+    return {"message": "Database reset successfully — remove this endpoint after migration"}
 
 @app.get("/survey")
 def survey_page():
