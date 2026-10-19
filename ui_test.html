@@ -600,9 +600,9 @@ function showResults(r) {
   `;
 
   const fuseGrantRow = r.meets_4_hour_requirement
-    ? `<tr><td style="color:var(--accent)">Fuse Grant</td><td style="color:var(--fg3)">—</td><td style="color:var(--accent)">−${fmt(r.fuse_grant)}</td></tr>`
+    ? `<tr><td style="color:var(--accent)">Fuse V2G Grant</td><td style="color:var(--fg3)">—</td><td style="color:var(--accent)">−${fmt(r.fuse_grant)}</td></tr>`
     : r.v2g_available
-      ? `<tr><td style="color:var(--warn-border)">Fuse Grant</td><td style="color:var(--fg3)">—</td><td style="color:var(--warn-border)">Not eligible (${r.assumptions.v2g_hours} hr window &lt; 4 hr requirement)</td></tr>`
+      ? `<tr><td style="color:var(--warn-border)">Fuse V2G Grant</td><td style="color:var(--fg3)">—</td><td style="color:var(--warn-border)">Not eligible (${r.assumptions.v2g_hours} hr window &lt; 4 hr requirement)</td></tr>`
       : '';
   document.getElementById('breakdown-table').innerHTML = `
     <thead><tr>
