@@ -191,17 +191,15 @@
     <div class="step-label">Step 1 of 4</div>
     <h2>Where is your fleet based?</h2>
     <p class="sub">Electricity rates and incentive programs vary by province and region.</p>
-    <div class="options" id="province-options" style="margin-bottom:20px">
-      <button class="opt-btn" onclick="selectProvince(this,'BC')"><span class="opt-icon">🏔️</span><div class="opt-text"><strong>British Columbia</strong><span>BC Hydro V2G program available</span></div></button>
-      <button class="opt-btn" onclick="selectProvince(this,'AB')"><span class="opt-icon">🌾</span><div class="opt-text"><strong>Alberta</strong><span>AESO grid programs</span></div></button>
-      <button class="opt-btn" onclick="selectProvince(this,'ON')"><span class="opt-icon">🍁</span><div class="opt-text"><strong>Ontario</strong><span>IESO grid programs</span></div></button>
-      <button class="opt-btn" onclick="selectProvince(this,'other')"><span class="opt-icon">🇨🇦</span><div class="opt-text"><strong>Other province</strong><span>General TCO comparison</span></div></button>
+    <div class="field">
+      <label>Province</label>
+      <input type="text" id="province_input" placeholder="e.g. British Columbia, Alberta, Ontario" oninput="state.province = this.value.trim()">
     </div>
     <div class="field">
       <label>City or region</label>
       <input type="text" id="city_input" placeholder="e.g. Vancouver, Kelowna, Prince George" oninput="state.city = this.value.trim()">
     </div>
-    <div class="error-msg" id="err-2">Please select your province and enter your city.</div>
+    <div class="error-msg" id="err-2">Please enter your province and city.</div>
     <div class="nav">
       <button class="btn-back" onclick="back(2)">Back</button>
       <button class="btn-next" onclick="next(2)">Continue</button>
@@ -488,6 +486,7 @@ function next(step) {
   const err = document.getElementById('err-' + step);
   err.classList.remove('show');
   if (step === 2) {
+    state.province = document.getElementById('province_input').value.trim();
     state.city = document.getElementById('city_input').value.trim();
     if (!state.province || !state.city) { err.classList.add('show'); return; }
     showStep(4); return;
@@ -697,6 +696,8 @@ function restart() {
   state.afternoon_end_hour = 17.0;
   state.province = null;
   state.city = '';
+  const provinceInput = document.getElementById('province_input');
+  if (provinceInput) provinceInput.value = '';
   const cityInput = document.getElementById('city_input');
   if (cityInput) cityInput.value = '';
   document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
