@@ -475,15 +475,15 @@ def calculate_fleet_savings(inputs) -> dict:
         }
 
     preliminary_project_incentive = project_incentive["preliminary_incentive_per_bus_supporting"]
-
-    # Fuse Grant: the subsidy shown to fleet owners
-    # EV TCO is set to exactly 10% less than diesel TCO.
-    # Fuse Grant = whatever makes up the difference.
+    
+    # Fuse Grant: per-type savings rates applied to each bus's conventional TCO
     SAVINGS_RATE = {"mini": 0.0641, "midsize": 0.0785, "fullsize": 0.103}
     target_ev_tco = sum(
-    bus_results[bt]["conventional_tco"] * (1 - SAVINGS_RATE[bt])
-    for bt in ["mini", "midsize", "fullsize"]
-)
+        tco["_conventional_tco_exact"] * (1 - SAVINGS_RATE[bt]) * count
+        for bt, count in counts.items()
+        if count > 0
+        for tco in [calculate_10_year_tco(bt, schedule)]
+    )
     fuse_grant = fleet_ev_tco_before_v2g - target_ev_tco
     fleet_ev_tco_with_v2g = target_ev_tco
     fleet_net_savings = fleet_conventional_tco - fleet_ev_tco_with_v2g
