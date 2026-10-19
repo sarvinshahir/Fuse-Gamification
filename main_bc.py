@@ -479,7 +479,11 @@ def calculate_fleet_savings(inputs) -> dict:
     # Fuse Grant: the subsidy shown to fleet owners
     # EV TCO is set to exactly 10% less than diesel TCO.
     # Fuse Grant = whatever makes up the difference.
-    target_ev_tco = fleet_conventional_tco * 0.90
+    SAVINGS_RATE = {"mini": 0.0641, "midsize": 0.0785, "fullsize": 0.103}
+    target_ev_tco = sum(
+    bus_results[bt]["conventional_tco"] * (1 - SAVINGS_RATE[bt])
+    for bt in ["mini", "midsize", "fullsize"]
+)
     fuse_grant = fleet_ev_tco_before_v2g - target_ev_tco
     fleet_ev_tco_with_v2g = target_ev_tco
     fleet_net_savings = fleet_conventional_tco - fleet_ev_tco_with_v2g
@@ -585,6 +589,11 @@ def startup():
 @app.get("/")
 def root():
     return FileResponse("ui_test.html")
+
+
+@app.get("/fuse-logo.png")
+def fuse_logo():
+    return FileResponse("fuse-logo.png", media_type="image/png")
 
 @app.get("/survey", response_class=HTMLResponse, summary="Survey interface")
 def survey():
