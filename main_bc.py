@@ -71,7 +71,7 @@ BUS_CONFIG = {
         "battery_kwh": 212,
         "energy_per_km": 0.875,
         "ev_price": 425_000,
-        "conventional_price": 175_000,
+        "conventional_price": 200_000,
     },
 }
 
@@ -349,8 +349,13 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
     annual_grid_kwh = annual_km * cfg["energy_per_km"] / CHARGING_EFFICIENCY
     electricity_10y = annual_grid_kwh * BC_ELECTRICITY_RATE * TCO_YEARS
     # Charging infrastructure is Fuse's cost — excluded from fleet operator TCO
-    ev_tco_before_v2g = cfg["ev_price"] + electricity_10y + maintenance["electric_10y"]
-
+    down_payment = cfg["ev_price"] * 0.10
+    loan_amount = cfg["ev_price"] * 0.90
+    monthly_rate = 0.08 / 12
+    n_payments = 10 * 12
+    monthly_payment = loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+    financed_ev_cost = down_payment + monthly_payment * n_payments
+    ev_tco_before_v2g = financed_ev_cost + electricity_10y + maintenance["electric_10y"]
     meets_4_hour_requirement = schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"]
 
     # Technical V2G capacity — calculated regardless of program eligibility, for display only
