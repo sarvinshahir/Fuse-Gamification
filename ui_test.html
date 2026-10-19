@@ -341,7 +341,7 @@
   <!-- Results -->
   <div id="results">
     <div class="step-label" style="margin-bottom:16px">Your Results</div>
-    <h2 id="results-heading" style="margin-bottom:20px">10-Year Fleet Cost Comparison</h2>
+    <h2 id="results-heading" style="margin-bottom:20px">10-Year Fleet Total Cost Comparison</h2>
     <div class="kpi-grid" id="kpi-grid"></div>
     <div class="rcard">
       <h3>Fleet Cost Breakdown (10 years)</h3>
@@ -354,6 +354,7 @@
     </div>
 
     <div class="disclaimer" id="disclaimer" style="margin-top:8px"></div>
+    <p style="font-size:0.82rem;color:var(--fg2);margin-top:10px">* Fuse is responsible for purchasing, installing, and maintaining bidirectional chargers.</p>
 
     <!-- Contact capture — shown below results -->
     <div id="contact-capture">
@@ -387,7 +388,7 @@
         <div class="error-msg" id="err-contact"></div>
         <div class="save-success" id="save-success">✓ Saved! We'll be in touch.</div>
         <div class="capture-actions">
-          <button class="btn-save" id="save-btn" onclick="saveContact()">Send me this report</button>
+          <button class="btn-save" id="save-btn" onclick="saveContact()">Click here if you are interested in the Fuse V2G program</button>
           <button class="btn-skip" onclick="skipContact()">No thanks</button>
         </div>
       </div>
@@ -576,7 +577,7 @@ function showResults(r) {
   const section = document.getElementById('results');
   section.style.display = 'block';
 
-  document.getElementById('disclaimer').textContent = r.disclaimer;
+  document.getElementById('disclaimer').textContent = 'Results are expert estimates based on the information supplied. The Fuse V2G Grant represents a V2G program benefit to reduce your 10-year electric TCO. Maintenance, fuel, and electricity figures are modelling assumptions.';
 
   const savings = r.fleet_net_savings_10y;
   const fleetDesc = Object.entries(r.bus_counts).filter(([,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', ');
@@ -617,17 +618,21 @@ function showResults(r) {
     </tbody>
   `;
 
-  const summaryRows = r.per_bus_results.map(b => `
+  const summaryRows = r.per_bus_results.map(b => {
+    const convTco = b.conventional_tco_10y * b.count;
+    const evTcoWithV2g = convTco * (1 - (b.bus_type === 'mini' ? 0.0641 : b.bus_type === 'midsize' ? 0.0785 : 0.103));
+    return `
     <tr>
       <td style="text-transform:capitalize">${b.bus_type}</td>
       <td>${b.count}</td>
-      <td>${fmt(b.conventional_tco_10y * b.count)}</td>
-      <td>${fmt(b.ev_tco_before_v2g * b.count)}</td>
+      <td>${fmt(convTco)}</td>
+      <td>approx. ${fmt(evTcoWithV2g)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
   document.getElementById('per-bus-table').innerHTML = `
     <thead><tr>
-      <th>Bus type</th><th>Count</th><th>Conv. TCO (fleet)</th><th>EV TCO before grant (fleet)</th>
+      <th>Bus type</th><th>Count</th><th>Conv. TCO (fleet)</th><th>EV TCO with V2G</th>
     </tr></thead>
     <tbody>${summaryRows}</tbody>
   `;
@@ -693,7 +698,7 @@ async function saveContact() {
     err.textContent = 'Error: ' + e.message;
     err.classList.add('show');
     btn.disabled = false;
-    btn.innerHTML = 'Send me this report';
+    btn.innerHTML = 'Click here if you are interested in the Fuse V2G program';
   }
 }
 
