@@ -392,7 +392,8 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
         "bus_type": bus_type,
         "model": cfg["model"],
         "conventional_purchase": cfg["conventional_price"],
-        "ev_purchase": cfg["ev_price"],
+        "ev_purchase": round(financed_ev_cost, 2),
+        "ev_financing_cost": round(financed_ev_cost - cfg["ev_price"], 2),
         "diesel_fuel_10y": round(diesel_10y, 2),
         "electricity_10y": round(electricity_10y, 2),
         "diesel_maintenance_10y": maintenance["diesel_10y"],
@@ -422,6 +423,7 @@ def calculate_fleet_savings(inputs) -> dict:
     fleet_size = inputs.mini_count + inputs.midsize_count + inputs.fullsize_count
     fleet_conventional_purchase = 0
     fleet_ev_purchase = 0
+    fleet_ev_financing_cost = 0
     fleet_conventional_tco = 0
     fleet_ev_tco_before_v2g = 0
     fleet_diesel_10y = 0
@@ -448,6 +450,7 @@ def calculate_fleet_savings(inputs) -> dict:
         })
 
         fleet_conventional_purchase += BUS_CONFIG[bus_type]["conventional_price"] * count
+        fleet_ev_financing_cost += tco["ev_financing_cost"] * count
         fleet_ev_purchase += BUS_CONFIG[bus_type]["ev_price"] * count
         fleet_conventional_tco += tco["_conventional_tco_exact"] * count
         fleet_ev_tco_before_v2g += tco["_ev_tco_before_v2g_exact"] * count
@@ -501,6 +504,7 @@ def calculate_fleet_savings(inputs) -> dict:
         "meets_4_hour_requirement": schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"],
         "fleet_conventional_purchase": round(fleet_conventional_purchase, 2),
         "fleet_ev_purchase": round(fleet_ev_purchase, 2),
+        "fleet_ev_financing_cost": round(fleet_ev_financing_cost, 2),
         "fleet_fuel_10y": round(fleet_diesel_10y, 2),
         "fleet_electricity_10y": round(fleet_electricity_10y, 2),
         "fleet_maintenance_conventional_10y": round(fleet_diesel_maint_10y, 2),
