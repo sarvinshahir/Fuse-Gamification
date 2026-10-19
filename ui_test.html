@@ -55,7 +55,9 @@
   /* Bus counter */
   .bus-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
   .bus-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 12px; text-align: center; }
-  .bus-card .bus-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 12px; }
+  .bus-card .bus-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+  .bus-card .bus-spec { font-size: 0.75rem; color: var(--fg3); margin-bottom: 2px; }
+  .bus-card .bus-battery { font-size: 0.75rem; color: var(--fg2); font-weight: 500; margin-bottom: 12px; }
   .counter { display: flex; align-items: center; justify-content: center; gap: 10px; }
   .counter button { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--border);
     background: var(--bg); color: var(--fg); font-size: 1.1rem; cursor: pointer; line-height: 1;
@@ -163,23 +165,59 @@
   <!-- Step 1: Intro / landing -->
   <div class="step active" id="step-1">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
-      <img src="data:image/png;base64,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" height="36" alt="Fuse">
+      <span style="font-size:1.1rem;font-weight:700;color:#1a6b8a;letter-spacing:0.02em">Fuse Power Management</span>
       <span style="font-size:0.82rem;color:var(--fg3);font-weight:600">October 2026</span>
     </div>
-    <h2>BC V2G Fleet Savings Calculator</h2>
-    <p class="sub" style="margin-bottom:20px">The Fuse V2G Calculator gives school bus fleet operators a clear, 10-year cost comparison between keeping diesel buses and switching to electric. Enter your fleet size, daily routes, and operating schedule, and the calculator estimates your total cost of ownership for both options — including bus purchase, financing, fuel, and maintenance. If your buses are eligible for the Fuse V2G program, a Fuse Grant is applied that brings your electric fleet TCO to 10% below diesel, showing you exactly how much you save by making the switch. The whole process takes under two minutes.</p>
+    <h2>Do you know how much your electric school bus can earn when it's parked?</h2>
+    <p class="sub" style="margin-bottom:16px">This calculator is for school bus operators who want to compare the 10-year total cost of ownership of a diesel bus versus an electric bus that can also supply power back to the grid when parked — a technology called Vehicle-to-Grid (V2G). Enter your fleet details and operating schedule, and we'll show you the full cost picture, including any savings from the Fuse V2G program.</p>
+
+    <!-- V2G charge/discharge chart -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 16px 10px;margin-bottom:20px">
+      <div style="font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg3);margin-bottom:12px">Typical V2G Day — Battery State of Charge</div>
+      <canvas id="v2g-chart" height="160" style="width:100%;display:block"></canvas>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">
+        <span style="font-size:0.75rem;color:var(--fg3);display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1a6b3c;display:inline-block"></span>Charging</span>
+        <span style="font-size:0.75rem;color:var(--fg3);display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#f6c90e;display:inline-block"></span>Driving</span>
+        <span style="font-size:0.75rem;color:var(--fg3);display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1a6b8a;display:inline-block"></span>V2G Export</span>
+      </div>
+    </div>
+
     <div class="error-msg" id="err-1"></div>
     <div class="nav"><button class="btn-next" onclick="showStep(2)">Get Started →</button></div>
   </div>
 
-  <!-- Step 2: Fleet size -->
+  <!-- Step 2: Province + City -->
   <div class="step" id="step-2">
-    <div class="step-label">Step 1 of 3</div>
-    <h2>How many buses are you looking to electrify?</h2>
-    <p class="sub">Select the number of each bus type.</p>
+    <div class="step-label">Step 1 of 4</div>
+    <h2>Where is your fleet based?</h2>
+    <p class="sub">Electricity rates and incentive programs vary by province and region.</p>
+    <div class="options" id="province-options" style="margin-bottom:20px">
+      <button class="opt-btn" onclick="selectProvince(this,'BC')"><span class="opt-icon">🏔️</span><div class="opt-text"><strong>British Columbia</strong><span>BC Hydro V2G program available</span></div></button>
+      <button class="opt-btn" onclick="selectProvince(this,'AB')"><span class="opt-icon">🌾</span><div class="opt-text"><strong>Alberta</strong><span>AESO grid programs</span></div></button>
+      <button class="opt-btn" onclick="selectProvince(this,'ON')"><span class="opt-icon">🍁</span><div class="opt-text"><strong>Ontario</strong><span>IESO grid programs</span></div></button>
+      <button class="opt-btn" onclick="selectProvince(this,'other')"><span class="opt-icon">🇨🇦</span><div class="opt-text"><strong>Other province</strong><span>General TCO comparison</span></div></button>
+    </div>
+    <div class="field">
+      <label>City or region</label>
+      <input type="text" id="city_input" placeholder="e.g. Vancouver, Kelowna, Prince George" oninput="state.city = this.value.trim()">
+    </div>
+    <div class="error-msg" id="err-2">Please select your province and enter your city.</div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(2)">Back</button>
+      <button class="btn-next" onclick="next(2)">Continue</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Fleet size -->
+  <div class="step" id="step-4">
+    <div class="step-label">Step 2 of 4</div>
+    <h2>How many buses do you operate?</h2>
+    <p class="sub">Select the number of each bus type in your fleet.</p>
     <div class="bus-grid">
       <div class="bus-card">
         <div class="bus-name">Small</div>
+        <div class="bus-spec">1–15 passengers</div>
+        <div class="bus-battery">~60 kWh battery</div>
         <div class="counter">
           <button onclick="adj('mini',-1)">−</button>
           <div class="count" id="mini-count">0</div>
@@ -188,6 +226,8 @@
       </div>
       <div class="bus-card">
         <div class="bus-name">Medium</div>
+        <div class="bus-spec">16–40 passengers</div>
+        <div class="bus-battery">~120 kWh battery</div>
         <div class="counter">
           <button onclick="adj('midsize',-1)">−</button>
           <div class="count" id="midsize-count">0</div>
@@ -196,6 +236,8 @@
       </div>
       <div class="bus-card">
         <div class="bus-name">Large</div>
+        <div class="bus-spec">41–72 passengers</div>
+        <div class="bus-battery">~220 kWh battery</div>
         <div class="counter">
           <button onclick="adj('fullsize',-1)">−</button>
           <div class="count" id="fullsize-count">0</div>
@@ -203,16 +245,17 @@
         </div>
       </div>
     </div>
-    <div class="error-msg" id="err-2">Add at least one bus to continue.</div>
+    <p style="font-size:0.82rem;color:var(--fg3);margin-bottom:20px">Larger buses have larger batteries, so they have more power to return to the grid.</p>
+    <div class="error-msg" id="err-4">Add at least one bus to continue.</div>
     <div class="nav">
-      <button class="btn-back" onclick="back(2)">Back</button>
-      <button class="btn-next" onclick="next(2)">Continue</button>
+      <button class="btn-back" onclick="showStep(2)">Back</button>
+      <button class="btn-next" onclick="next(4)">Continue</button>
     </div>
   </div>
 
-  <!-- Step 3: Operating schedule -->
-  <div class="step" id="step-3">
-    <div class="step-label">Step 2 of 3</div>
+  <!-- Step 5: Operating schedule -->
+  <div class="step" id="step-5">
+    <div class="step-label">Step 3 of 4</div>
     <h2>What does a typical school day look like?</h2>
     <p class="sub">We use this to calculate battery state and the available V2G window.</p>
 
@@ -261,16 +304,16 @@
       </div>
     </div>
 
-    <div class="error-msg" id="err-3"></div>
+    <div class="error-msg" id="err-5"></div>
     <div class="nav">
-      <button class="btn-back" onclick="back(3)">Back</button>
-      <button class="btn-next" onclick="next(3)">Continue</button>
+      <button class="btn-back" onclick="back(5)">Back</button>
+      <button class="btn-next" onclick="next(5)">Continue</button>
     </div>
   </div>
 
-  <!-- Step 4: V2G evening availability -->
-  <div class="step" id="step-4">
-    <div class="step-label">Step 3 of 3</div>
+  <!-- Step 6: V2G evening availability -->
+  <div class="step" id="step-6">
+    <div class="step-label">Step 4 of 4</div>
     <h2>Are your buses available to export power between 5 PM and 9 PM?</h2>
     <p class="sub">Buses return to base and stay connected during BC Hydro's 5–9 PM export window.</p>
     <div class="options">
@@ -283,9 +326,9 @@
         <div class="opt-text"><strong>No, not available</strong><span>Buses are in service or unavailable during this window</span></div>
       </button>
     </div>
-    <div class="error-msg" id="err-4">Please select an option to continue.</div>
+    <div class="error-msg" id="err-6">Please select an option to continue.</div>
     <div class="nav">
-      <button class="btn-back" onclick="back(4)">Back</button>
+      <button class="btn-back" onclick="back(6)">Back</button>
       <button class="btn-next" id="calc-btn" onclick="calculate()">
         See my results
       </button>
@@ -348,7 +391,7 @@
     </div>
 
     <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn-back" onclick="showStep(4)">← Back</button>
+      <button class="btn-back" onclick="showStep(6)">← Back</button>
       <button class="restart-btn" id="restart-btn" style="display:none;flex:1" onclick="restart()">← Start over</button>
     </div>
   </div>
@@ -366,14 +409,22 @@ const state = {
   morning_end_hour: 9.0,
   afternoon_start_hour: 14.5,
   afternoon_end_hour: 17.0,
+  province: null,
+  city: '',
 };
 
 let lastResults = null;
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 5;
 
 function setProgress(step) {
   document.getElementById('progress').style.width = ((step / TOTAL_STEPS) * 100) + '%';
+}
+
+function selectProvince(btn, value) {
+  state.province = value;
+  document.querySelectorAll('#province-options .opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
 }
 
 function select(btn, key, value) {
@@ -436,9 +487,13 @@ function updateSchedulePreview() {
 function next(step) {
   const err = document.getElementById('err-' + step);
   err.classList.remove('show');
-  if (step === 1 && state.bc_confirmed === null) { err.classList.add('show'); return; }
-  if (step === 2 && (state.mini + state.midsize + state.fullsize) === 0) { err.classList.add('show'); return; }
-  if (step === 3) {
+  if (step === 2) {
+    state.city = document.getElementById('city_input').value.trim();
+    if (!state.province || !state.city) { err.classList.add('show'); return; }
+    showStep(4); return;
+  }
+  if (step === 4 && (state.mini + state.midsize + state.fullsize) === 0) { err.classList.add('show'); return; }
+  if (step === 5) {
     if (state.daily_km <= 0) { err.textContent = 'Please enter a valid daily distance.'; err.classList.add('show'); return; }
     if (state.morning_end_hour <= state.morning_start_hour) { err.textContent = 'Morning end must be after morning start.'; err.classList.add('show'); return; }
     if (state.afternoon_start_hour <= state.morning_end_hour) { err.textContent = 'Afternoon start must be after morning end.'; err.classList.add('show'); return; }
@@ -456,7 +511,7 @@ function fmt(n) {
 }
 
 async function calculate() {
-  const err = document.getElementById('err-4');
+  const err = document.getElementById('err-6');
   err.classList.remove('show');
   if (state.available_5_9pm === null) { err.textContent = 'Please select an option to continue.'; err.classList.add('show'); return; }
 
@@ -640,6 +695,10 @@ function restart() {
   state.morning_end_hour = 9.0;
   state.afternoon_start_hour = 14.5;
   state.afternoon_end_hour = 17.0;
+  state.province = null;
+  state.city = '';
+  const cityInput = document.getElementById('city_input');
+  if (cityInput) cityInput.value = '';
   document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
   ['mini','midsize','fullsize'].forEach(t => document.getElementById(t+'-count').textContent = '0');
   document.getElementById('contact-capture').classList.remove('show');
@@ -649,6 +708,145 @@ function restart() {
   showStep(1);
 }
 
+// V2G Chart
+function drawV2GChart() {
+  const canvas = document.getElementById('v2g-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.offsetWidth || 560;
+  const cssH = 160;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = cssW, H = cssH;
+
+  const padL = 36, padR = 12, padT = 10, padB = 28;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  // Determine dark mode
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+  const labelColor = isDark ? '#6b7280' : '#8a96a8';
+  const bgColor = isDark ? '#1f2937' : '#ffffff';
+
+  // Data: [hour, soc%]
+  // Phase 1: 0→6h charging 60→100%
+  // Phase 2: 6→17h driving 100→60%
+  // Phase 3: 17→21h V2G 60→20%
+  // Phase 4: 21→24h charging 20→60%
+  const segments = [
+    { points: [[0,60],[6,100]], color: '#1a6b3c', phase: 'charging' },
+    { points: [[6,100],[17,60]], color: '#d4a017', phase: 'driving' },
+    { points: [[17,60],[21,20]], color: '#1a6b8a', phase: 'v2g' },
+    { points: [[21,20],[24,60]], color: '#1a6b3c', phase: 'charging' },
+  ];
+
+  const xScale = (h) => padL + (h / 24) * chartW;
+  const yScale = (pct) => padT + chartH - (pct / 100) * chartH;
+
+  // Background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, W, H);
+
+  // Horizontal grid lines at 20%, 40%, 60%, 80%, 100%
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 1;
+  [0, 20, 40, 60, 80, 100].forEach(pct => {
+    const y = yScale(pct);
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(padL + chartW, y);
+    ctx.stroke();
+  });
+
+  // Vertical grid lines at 6h intervals
+  ctx.strokeStyle = gridColor;
+  [0, 6, 12, 18, 24].forEach(h => {
+    const x = xScale(h);
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, padT + chartH);
+    ctx.stroke();
+  });
+
+  // Draw filled area under each segment
+  segments.forEach(seg => {
+    const [[x1,y1],[x2,y2]] = seg.points;
+    ctx.beginPath();
+    ctx.moveTo(xScale(x1), yScale(0));
+    ctx.lineTo(xScale(x1), yScale(y1));
+    ctx.lineTo(xScale(x2), yScale(y2));
+    ctx.lineTo(xScale(x2), yScale(0));
+    ctx.closePath();
+    ctx.fillStyle = seg.color + '22';
+    ctx.fill();
+  });
+
+  // Draw lines
+  segments.forEach(seg => {
+    const [[x1,y1],[x2,y2]] = seg.points;
+    ctx.beginPath();
+    ctx.moveTo(xScale(x1), yScale(y1));
+    ctx.lineTo(xScale(x2), yScale(y2));
+    ctx.strokeStyle = seg.color;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  });
+
+  // Draw junction dots
+  const junctions = [[0,60],[6,100],[17,60],[21,20],[24,60]];
+  junctions.forEach(([h,pct]) => {
+    ctx.beginPath();
+    ctx.arc(xScale(h), yScale(pct), 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Y-axis labels
+  ctx.fillStyle = labelColor;
+  ctx.font = '10px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  [0, 20, 40, 60, 80, 100].forEach(pct => {
+    ctx.fillText(pct + '%', padL - 4, yScale(pct) + 3.5);
+  });
+
+  // X-axis labels — regular ticks
+  ctx.textAlign = 'center';
+  ctx.font = '10px Inter, system-ui, sans-serif';
+  ['12am','6am','12pm','','12am'].forEach((label, i) => {
+    ctx.fillStyle = labelColor;
+    ctx.fillText(label, xScale(i * 6), padT + chartH + 16);
+  });
+
+  // Bold 5pm and 9pm markers
+  const boldMarkers = [{ h: 17, label: '5pm' }, { h: 21, label: '9pm' }];
+  boldMarkers.forEach(({ h, label }) => {
+    const x = xScale(h);
+    // Dashed vertical line
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, padT + chartH);
+    ctx.stroke();
+    ctx.restore();
+    // Bold label
+    ctx.fillStyle = isDark ? '#e5e7eb' : '#1a2233';
+    ctx.font = 'bold 10px Inter, system-ui, sans-serif';
+    ctx.fillText(label, x, padT + chartH + 16);
+  });
+}
+
 // Init
 buildTimeOptions('morning_start', 7.0);
 buildTimeOptions('morning_end', 9.0);
@@ -656,4 +854,7 @@ buildTimeOptions('afternoon_start', 14.5);
 buildTimeOptions('afternoon_end', 17.0);
 updateSchedulePreview();
 setProgress(1);
+// Draw chart after layout settles
+requestAnimationFrame(drawV2GChart);
+window.addEventListener('resize', drawV2GChart);
 </script>
