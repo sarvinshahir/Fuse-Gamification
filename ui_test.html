@@ -175,11 +175,6 @@
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 16px 10px;margin-bottom:20px">
       <div style="font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg3);margin-bottom:12px">Typical V2G Day — Battery State of Charge</div>
       <canvas id="v2g-chart" height="160" style="width:100%;display:block"></canvas>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">
-        <span style="font-size:0.75rem;color:var(--fg3);display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1a6b3c;display:inline-block"></span>Charging</span>
-        <span style="font-size:0.75rem;color:var(--fg3);display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#f6c90e;display:inline-block"></span>Driving</span>
-        <span style="font-size:0.75rem;color:var(--fg3);display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1a6b8a;display:inline-block"></span>V2G Export</span>
-      </div>
     </div>
 
     <div class="error-msg" id="err-1"></div>
@@ -359,8 +354,7 @@
     <!-- Contact capture — shown below results -->
     <div id="contact-capture">
       <div class="capture-card">
-        <h3>Want a copy of this report?</h3>
-        <p>Enter your details and we'll send you a summary along with next steps on the Fuse V2G program.</p>
+        <p>Enter your details and we'll be in touch about next steps on the Fuse V2G program.</p>
         <div class="field-row">
           <div class="field">
             <label>First name</label>
@@ -765,7 +759,7 @@ function drawV2GChart() {
   const segments = [
     { points: [[0,60],[6,100]], color: '#1a6b3c', phase: 'charging' },
     { points: [[6,100],[17,60]], color: '#d4a017', phase: 'driving' },
-    { points: [[17,60],[21,20]], color: '#1a6b8a', phase: 'v2g' },
+    { points: [[17,60],[21,20]], color: '#e03c5a', phase: 'v2g' },
     { points: [[21,20],[24,60]], color: '#1a6b3c', phase: 'charging' },
   ];
 
@@ -820,6 +814,21 @@ function drawV2GChart() {
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.stroke();
+  });
+
+  // Zone labels — placed just below the line midpoint, inside the filled region
+  // Each zone: midpoint hour, SOC at that midpoint (on the line), offset downward
+  const zoneLabels = [
+    { h: 3,    pct: 70,  text: 'Charging',   color: '#1a6b3c' },
+    { h: 11.5, pct: 63,  text: 'Driving',    color: '#d4a017' },
+    { h: 19,   pct: 23,  text: 'V2G Export', color: '#e03c5a' },
+    { h: 22.5, pct: 28,  text: 'Charging',   color: '#1a6b3c' },  // 9pm→midnight line midpoint ~40%, show below
+  ];
+  ctx.font = 'bold 9px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  zoneLabels.forEach(({ h, pct, text, color }) => {
+    ctx.fillStyle = color;
+    ctx.fillText(text, xScale(h), yScale(pct) + 12);
   });
 
   // Draw junction dots
