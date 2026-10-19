@@ -57,7 +57,7 @@ BUS_CONFIG = {
         "battery_kwh": 175,
         "energy_per_km": 0.80,
         "ev_price": 382_646,
-        "conventional_price": 140_000,
+        "conventional_price": 160_000,
     },
     "fullsize": {
         "model": "LIONC Range Plus",
@@ -475,7 +475,7 @@ def calculate_fleet_savings(inputs) -> dict:
         }
 
     preliminary_project_incentive = project_incentive["preliminary_incentive_per_bus_supporting"]
-    
+
     # Fuse Grant: per-type savings rates applied to each bus's conventional TCO
     SAVINGS_RATE = {"mini": 0.0641, "midsize": 0.0785, "fullsize": 0.103}
     target_ev_tco = sum(
