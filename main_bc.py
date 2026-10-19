@@ -5,6 +5,7 @@ BC-specific build: main_bc.py
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
@@ -586,14 +587,9 @@ app.add_middleware(
 def startup():
     init_db()
 
-@app.get("/", summary="API status")
+@app.get("/")
 def root():
-    return {
-        "status": "ok",
-        "service": "BC School Bus V2G Calculator",
-        "version": MODEL_VERSION,
-        "province": "British Columbia",
-    }
+    return FileResponse("ui_test.html")
 
 @app.get("/survey", response_class=HTMLResponse, summary="Survey interface")
 def survey():
