@@ -1,0 +1,724 @@
+<title>BC V2G Calculator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #f5f7fa; --surface: #ffffff; --border: #e2e6ed;
+    --fg: #1a2233; --fg2: #4a5568; --fg3: #8a96a8;
+    --accent: #1a6b3c; --accent-light: #e6f4ec;
+    --danger: #c0392b; --warn-bg: #fffbea; --warn-border: #f6c90e;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111827; --surface: #1f2937; --border: #374151;
+      --fg: #f3f4f6; --fg2: #9ca3af; --fg3: #6b7280;
+      --accent: #34d399; --accent-light: #064e3b;
+      --warn-bg: #2d2000; --warn-border: #d97706; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111827; --surface: #1f2937; --border: #374151;
+    --fg: #f3f4f6; --fg2: #9ca3af; --fg3: #6b7280;
+    --accent: #34d399; --accent-light: #064e3b;
+    --warn-bg: #2d2000; --warn-border: #d97706; color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--fg); font-size: 15px; line-height: 1.6; min-height: 100%; }
+
+  .shell { max-width: 620px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 64px; }
+
+  /* Progress */
+  .progress-bar { height: 4px; background: var(--border); border-radius: 99px; margin-bottom: 36px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s ease; }
+  .step-label { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg3); margin-bottom: 8px; }
+
+  /* Step */
+  .step { display: none; animation: fadeIn 0.25s ease; }
+  .step.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  h2 { font-size: 1.45rem; font-weight: 700; line-height: 1.3; text-wrap: balance; margin-bottom: 8px; }
+  .sub { color: var(--fg2); font-size: 0.92rem; margin-bottom: 28px; }
+
+  /* Option buttons */
+  .options { display: flex; flex-direction: column; gap: 10px; }
+  .opt-btn { display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+    background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
+    cursor: pointer; text-align: left; font-family: inherit; font-size: 0.95rem; color: var(--fg);
+    transition: border-color 0.15s, background 0.15s; }
+  .opt-btn:hover { border-color: var(--accent); }
+  .opt-btn.selected { border-color: var(--accent); background: var(--accent-light); }
+  .opt-icon { font-size: 1.3rem; flex-shrink: 0; }
+  .opt-text strong { display: block; font-weight: 600; }
+  .opt-text span { font-size: 0.82rem; color: var(--fg2); }
+
+  /* Bus counter */
+  .bus-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .bus-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 12px; text-align: center; }
+  .bus-card .bus-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 12px; }
+  .counter { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .counter button { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--border);
+    background: var(--bg); color: var(--fg); font-size: 1.1rem; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center; transition: border-color 0.15s; }
+  .counter button:hover { border-color: var(--accent); color: var(--accent); }
+  .counter .count { font-size: 1.3rem; font-weight: 700; min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  /* Text inputs */
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--fg2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input { width: 100%; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--fg); font-size: 0.95rem; font-family: inherit; transition: border-color 0.15s; }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Nav */
+  .nav { display: flex; gap: 10px; margin-top: 28px; }
+  .btn-next { flex: 1; padding: 12px 20px; background: var(--accent); color: #fff; font-size: 0.95rem;
+    font-weight: 600; border: none; border-radius: 8px; cursor: pointer; font-family: inherit; transition: opacity 0.15s; }
+  .btn-next:hover { opacity: 0.88; }
+  .btn-next:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-back { padding: 12px 18px; background: none; border: 1.5px solid var(--border); color: var(--fg2);
+    font-size: 0.9rem; border-radius: 8px; cursor: pointer; font-family: inherit; transition: border-color 0.15s; }
+  .btn-back:hover { border-color: var(--accent); color: var(--accent); }
+
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg { color: var(--danger); font-size: 0.85rem; margin-top: 10px; display: none; }
+  .error-msg.show { display: block; }
+
+  /* Schedule step */
+  .schedule-preview { font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-top: 12px; min-height: 1.2em; }
+  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .route-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg3); margin-bottom: 8px; margin-top: 16px; }
+  .v2g-context { font-size: 0.82rem; color: var(--fg2); background: var(--accent-light); border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
+  select { width: 100%; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--fg); font-size: 0.95rem; font-family: inherit; transition: border-color 0.15s; appearance: none; }
+  select:focus { outline: none; border-color: var(--accent); }
+
+  /* Results */
+  #results { display: none; animation: fadeIn 0.25s ease; }
+  #results.show { display: block; }
+  .disclaimer { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 8px;
+    padding: 12px 14px; font-size: 0.8rem; color: var(--fg2); margin-bottom: 20px; }
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .kpi.highlight { background: var(--accent-light); border-color: var(--accent); }
+  .kpi .klabel { font-size: 0.76rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg2); margin-bottom: 4px; }
+  .kpi .kvalue { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .kpi.highlight .kvalue { color: var(--accent); }
+  .kpi .ksub { font-size: 0.76rem; color: var(--fg2); margin-top: 2px; }
+  .rcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 20px 8px; margin-bottom: 16px; }
+  .rcard h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  th { text-align: left; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--fg2); padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  td:not(:first-child), th:not(:first-child) { text-align: right; }
+  .note { font-size: 0.78rem; color: var(--fg2); font-style: italic; padding: 10px 0 4px; }
+
+  /* Contact capture card (shown below results) */
+  #contact-capture { display: none; margin-top: 24px; }
+  #contact-capture.show { display: block; animation: fadeIn 0.25s ease; }
+  .capture-card { background: var(--surface); border: 2px solid var(--accent); border-radius: var(--radius); padding: 24px; }
+  .capture-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; }
+  .capture-card p { font-size: 0.88rem; color: var(--fg2); margin-bottom: 20px; }
+  .capture-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-save { flex: 1; padding: 11px 20px; background: var(--accent); color: #fff; font-size: 0.9rem;
+    font-weight: 600; border: none; border-radius: 8px; cursor: pointer; font-family: inherit; transition: opacity 0.15s; }
+  .btn-save:hover { opacity: 0.88; }
+  .btn-save:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-skip { padding: 11px 18px; background: none; border: 1.5px solid var(--border); color: var(--fg2);
+    font-size: 0.88rem; border-radius: 8px; cursor: pointer; font-family: inherit; transition: border-color 0.15s; }
+  .btn-skip:hover { border-color: var(--fg3); }
+  .save-success { background: var(--accent-light); border: 1px solid var(--accent); border-radius: 8px;
+    padding: 12px 14px; font-size: 0.88rem; color: var(--accent); display: none; }
+  .save-success.show { display: block; }
+
+  .restart-btn { background: none; border: 1.5px solid var(--border); color: var(--fg2); padding: 10px 20px;
+    border-radius: 8px; cursor: pointer; font-size: 0.88rem; font-family: inherit; margin-top: 16px; }
+  .restart-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .how-calc-btn { background: none; border: none; color: var(--fg3); font-size: 0.82rem; font-family: inherit;
+    cursor: pointer; padding: 6px 0; margin-top: 8px; text-decoration: underline; text-underline-offset: 3px; }
+  .how-calc-btn:hover { color: var(--accent); }
+
+  .incentive-summary-val { font-size: 1.3rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .incentive-summary-label { font-size: 0.82rem; color: var(--fg2); margin-top: 2px; }
+
+  @media (max-width: 480px) {
+    .bus-grid { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: 1fr; }
+    .field-row { grid-template-columns: 1fr; }
+    .capture-actions { flex-direction: column; }
+    .time-row { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="shell">
+  <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+  <!-- Step 1: Fleet region / confirmation -->
+  <div class="step active" id="step-1">
+    <div class="step-label">Step 1 of 4</div>
+    <h2>Are your buses based in British Columbia?</h2>
+    <p class="sub">This calculator is built for BC school bus operators using BC Hydro's V2G Schedule B incentive.</p>
+    <div class="options">
+      <button class="opt-btn" onclick="select(this,'bc_confirmed',true)">
+        <span class="opt-icon">✅</span>
+        <div class="opt-text"><strong>Yes, we operate in BC</strong><span>I want to see BC-specific V2G estimates</span></div>
+      </button>
+      <button class="opt-btn" onclick="select(this,'bc_confirmed',false)">
+        <span class="opt-icon">📍</span>
+        <div class="opt-text"><strong>No, we're outside BC</strong><span>Results will still show TCO savings without BC Hydro incentive</span></div>
+      </button>
+    </div>
+    <div class="error-msg" id="err-1">Please select an option to continue.</div>
+    <div class="nav"><button class="btn-next" onclick="next(1)">Continue</button></div>
+  </div>
+
+  <!-- Step 2: Fleet size -->
+  <div class="step" id="step-2">
+    <div class="step-label">Step 2 of 4</div>
+    <h2>How many buses are you looking to electrify?</h2>
+    <p class="sub">Select the number of each bus type.</p>
+    <div class="bus-grid">
+      <div class="bus-card">
+        <div class="bus-name">Small</div>
+        <div class="counter">
+          <button onclick="adj('mini',-1)">−</button>
+          <div class="count" id="mini-count">0</div>
+          <button onclick="adj('mini',1)">+</button>
+        </div>
+      </div>
+      <div class="bus-card">
+        <div class="bus-name">Medium</div>
+        <div class="counter">
+          <button onclick="adj('midsize',-1)">−</button>
+          <div class="count" id="midsize-count">0</div>
+          <button onclick="adj('midsize',1)">+</button>
+        </div>
+      </div>
+      <div class="bus-card">
+        <div class="bus-name">Large</div>
+        <div class="counter">
+          <button onclick="adj('fullsize',-1)">−</button>
+          <div class="count" id="fullsize-count">0</div>
+          <button onclick="adj('fullsize',1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="error-msg" id="err-2">Add at least one bus to continue.</div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(2)">Back</button>
+      <button class="btn-next" onclick="next(2)">Continue</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Operating schedule -->
+  <div class="step" id="step-3">
+    <div class="step-label">Step 3 of 4</div>
+    <h2>What does a typical school day look like?</h2>
+    <p class="sub">We use this to calculate battery state and the available V2G window.</p>
+
+    <div class="field">
+      <label>Daily distance per bus (km)</label>
+      <input type="number" id="daily_km" value="80" min="10" max="500" oninput="updateSchedulePreview()">
+    </div>
+
+    <div class="route-label">Morning route</div>
+    <div class="time-row">
+      <div class="field" style="margin-bottom:0">
+        <label>Morning start</label>
+        <select id="morning_start" onchange="updateSchedulePreview()"></select>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Morning end</label>
+        <select id="morning_end" onchange="updateSchedulePreview()"></select>
+      </div>
+    </div>
+
+    <div class="route-label">Afternoon route</div>
+    <div class="time-row">
+      <div class="field" style="margin-bottom:0">
+        <label>Afternoon start</label>
+        <select id="afternoon_start" onchange="updateSchedulePreview()"></select>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Afternoon end</label>
+        <select id="afternoon_end" onchange="updateSchedulePreview()"></select>
+      </div>
+    </div>
+
+    <div id="schedule-preview" class="schedule-preview"></div>
+
+    <div style="margin-top:24px">
+      <div class="route-label" style="margin-top:0;margin-bottom:10px">During the midday gap, are your buses back at base?</div>
+      <div class="options">
+        <button class="opt-btn" id="midday-yes" onclick="selectMidday(true)">
+          <span class="opt-icon">🏫</span>
+          <div class="opt-text"><strong>Yes, back at base</strong><span>Buses return to depot between routes</span></div>
+        </button>
+        <button class="opt-btn" id="midday-no" onclick="selectMidday(false)">
+          <span class="opt-icon">🚌</span>
+          <div class="opt-text"><strong>No, staying on the road</strong><span>Buses remain in service or parked away from depot</span></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="error-msg" id="err-3"></div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(3)">Back</button>
+      <button class="btn-next" onclick="next(3)">Continue</button>
+    </div>
+  </div>
+
+  <!-- Step 4: V2G evening availability -->
+  <div class="step" id="step-4">
+    <div class="step-label">Step 4 of 4</div>
+    <h2>Are your buses available to export power between 5 PM and 9 PM?</h2>
+    <p class="sub">Buses return to base and stay connected during BC Hydro's 5–9 PM export window.</p>
+    <div class="options">
+      <button class="opt-btn" onclick="select(this,'available_5_9pm',true)">
+        <span class="opt-icon">⚡</span>
+        <div class="opt-text"><strong>Yes, available evenings</strong><span>Buses return to base and stay plugged in</span></div>
+      </button>
+      <button class="opt-btn" onclick="select(this,'available_5_9pm',false)">
+        <span class="opt-icon">🚌</span>
+        <div class="opt-text"><strong>No, not available</strong><span>Buses are in service or unavailable during this window</span></div>
+      </button>
+    </div>
+    <div class="error-msg" id="err-4">Please select an option to continue.</div>
+    <div class="nav">
+      <button class="btn-back" onclick="back(4)">Back</button>
+      <button class="btn-next" id="calc-btn" onclick="calculate()">
+        See my results
+      </button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="step-label" style="margin-bottom:16px">Your Results</div>
+    <h2 id="results-heading" style="margin-bottom:20px">10-Year Fleet Cost Comparison</h2>
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <div class="rcard">
+      <h3>Fleet Cost Breakdown (10 years)</h3>
+      <div style="overflow-x:auto"><table id="breakdown-table"></table></div>
+    </div>
+    <div class="rcard" id="incentive-card">
+      <h3>BC Hydro V2G Program Benefit</h3>
+      <div id="incentive-summary"></div>
+      <button class="how-calc-btn" id="how-calc-toggle" onclick="toggleHowCalc()" style="display:none">How this is calculated ▸</button>
+      <div id="how-calc-detail" style="display:none;margin-top:14px">
+        <div style="overflow-x:auto"><table id="incentive-table"></table></div>
+        <div class="note" id="incentive-note"></div>
+      </div>
+    </div>
+    <div class="rcard">
+      <h3>Fleet Summary by Bus Type</h3>
+      <div style="overflow-x:auto"><table id="per-bus-table"></table></div>
+    </div>
+
+    <div class="disclaimer" id="disclaimer" style="margin-top:8px"></div>
+
+    <!-- Contact capture — shown below results -->
+    <div id="contact-capture">
+      <div class="capture-card">
+        <h3>Want a copy of this report?</h3>
+        <p>Enter your details and we'll send you a summary along with next steps on the BC Hydro V2G program.</p>
+        <div class="field-row">
+          <div class="field">
+            <label>First name</label>
+            <input type="text" id="contact_name" placeholder="Your name">
+          </div>
+          <div class="field">
+            <label>Company / school district</label>
+            <input type="text" id="company_name" placeholder="Organisation name">
+          </div>
+        </div>
+        <div class="field">
+          <label>Email address</label>
+          <input type="email" id="email" placeholder="you@example.com">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Phone (optional)</label>
+            <input type="tel" id="phone" placeholder="+1 604 000 0000">
+          </div>
+          <div class="field">
+            <label>Depot location (optional)</label>
+            <input type="text" id="depot_location" placeholder="e.g. Burnaby, BC">
+          </div>
+        </div>
+        <div class="error-msg" id="err-contact"></div>
+        <div class="save-success" id="save-success">✓ Saved! We'll be in touch.</div>
+        <div class="capture-actions">
+          <button class="btn-save" id="save-btn" onclick="saveContact()">Send me this report</button>
+          <button class="btn-skip" onclick="skipContact()">No thanks</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="restart-btn" id="restart-btn" style="display:none" onclick="restart()">← Start over</button>
+  </div>
+</div>
+
+<script>
+const API = 'https://fuse-gamification.onrender.com';
+const state = {
+  bc_confirmed: null,
+  available_5_9pm: null,
+  midday_charging_available: false,
+  mini: 0, midsize: 0, fullsize: 0,
+  daily_km: 80,
+  morning_start_hour: 7.0,
+  morning_end_hour: 9.0,
+  afternoon_start_hour: 14.5,
+  afternoon_end_hour: 17.0,
+};
+
+let lastResults = null;
+
+const TOTAL_STEPS = 4;
+
+function setProgress(step) {
+  document.getElementById('progress').style.width = ((step / TOTAL_STEPS) * 100) + '%';
+}
+
+function select(btn, key, value) {
+  const parent = btn.closest('.options');
+  parent.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  state[key] = value;
+}
+
+function adj(type, delta) {
+  state[type] = Math.max(0, (state[type] || 0) + delta);
+  document.getElementById(type + '-count').textContent = state[type];
+}
+
+function showStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  document.getElementById('results').style.display = 'none';
+  setProgress(n);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function buildTimeOptions(selectId, defaultHour) {
+  const el = document.getElementById(selectId);
+  for (let h = 5; h <= 22; h++) {
+    for (let m of [0, 30]) {
+      const val = h + m / 60;
+      const hDisp = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+      const mDisp = m === 0 ? '00' : '30';
+      const ampm = h < 12 ? 'AM' : 'PM';
+      const label = `${hDisp}:${mDisp} ${ampm}`;
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      if (Math.abs(val - defaultHour) < 0.01) opt.selected = true;
+      el.appendChild(opt);
+    }
+  }
+}
+
+function selectMidday(value) {
+  state.midday_charging_available = value;
+  document.getElementById('midday-yes').classList.toggle('selected', value === true);
+  document.getElementById('midday-no').classList.toggle('selected', value === false);
+}
+
+function updateSchedulePreview() {
+  state.morning_start_hour = parseFloat(document.getElementById('morning_start').value);
+  state.morning_end_hour = parseFloat(document.getElementById('morning_end').value);
+  state.afternoon_start_hour = parseFloat(document.getElementById('afternoon_start').value);
+  state.afternoon_end_hour = parseFloat(document.getElementById('afternoon_end').value);
+  state.daily_km = parseFloat(document.getElementById('daily_km').value) || 80;
+
+  const v2gStart = Math.max(17, state.afternoon_end_hour);
+  const v2g = Math.max(0, 21 - v2gStart);
+  document.getElementById('schedule-preview').textContent =
+    `V2G window: ${v2g.toFixed(1)} hrs (5–9 PM)`;
+}
+
+function next(step) {
+  const err = document.getElementById('err-' + step);
+  err.classList.remove('show');
+  if (step === 1 && state.bc_confirmed === null) { err.classList.add('show'); return; }
+  if (step === 2 && (state.mini + state.midsize + state.fullsize) === 0) { err.classList.add('show'); return; }
+  if (step === 3) {
+    if (state.daily_km <= 0) { err.textContent = 'Please enter a valid daily distance.'; err.classList.add('show'); return; }
+    if (state.morning_end_hour <= state.morning_start_hour) { err.textContent = 'Morning end must be after morning start.'; err.classList.add('show'); return; }
+    if (state.afternoon_start_hour <= state.morning_end_hour) { err.textContent = 'Afternoon start must be after morning end.'; err.classList.add('show'); return; }
+    if (state.afternoon_end_hour <= state.afternoon_start_hour) { err.textContent = 'Afternoon end must be after afternoon start.'; err.classList.add('show'); return; }
+  }
+  showStep(step + 1);
+}
+
+function back(step) {
+  showStep(step - 1);
+}
+
+function fmt(n) {
+  return '$' + Math.round(n).toLocaleString('en-CA');
+}
+
+async function calculate() {
+  const err = document.getElementById('err-4');
+  err.classList.remove('show');
+  if (state.available_5_9pm === null) { err.textContent = 'Please select an option to continue.'; err.classList.add('show'); return; }
+
+  const btn = document.getElementById('calc-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Calculating…';
+
+  const payload = {
+    mini_count: state.mini,
+    midsize_count: state.midsize,
+    fullsize_count: state.fullsize,
+    available_5_9pm: state.available_5_9pm,
+    midday_charging_available: state.midday_charging_available,
+    daily_km: state.daily_km,
+    morning_start_hour: state.morning_start_hour,
+    morning_end_hour: state.morning_end_hour,
+    afternoon_start_hour: state.afternoon_start_hour,
+    afternoon_end_hour: state.afternoon_end_hour,
+  };
+
+  try {
+    const res = await fetch(`${API}/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const e = await res.json();
+      throw new Error(Array.isArray(e.detail) ? e.detail.map(x => x.msg).join('; ') : e.detail);
+    }
+    const data = await res.json();
+    lastResults = data;
+    showResults(data.results);
+  } catch (e) {
+    err.textContent = 'Error: ' + e.message + '. Make sure the backend is running at ' + API;
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.innerHTML = 'See my results';
+  }
+}
+
+function showResults(r) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  setProgress(TOTAL_STEPS);
+  const section = document.getElementById('results');
+  section.style.display = 'block';
+
+  document.getElementById('disclaimer').textContent = r.disclaimer;
+
+  const savings = r.fleet_net_savings_10y;
+  const fleetDesc = Object.entries(r.bus_counts).filter(([,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', ');
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi">
+      <div class="klabel">10-Year Diesel TCO</div>
+      <div class="kvalue">${fmt(r.fleet_conventional_tco)}</div>
+      <div class="ksub">${r.fleet_size} buses · ${fleetDesc}</div>
+    </div>
+    <div class="kpi highlight">
+      <div class="klabel">10-Year Electric TCO</div>
+      <div class="kvalue">${fmt(r.fleet_ev_tco_with_v2g)}</div>
+      <div class="ksub">${r.meets_4_hour_requirement ? 'After BC Hydro V2G program benefit' : 'No V2G benefit applied'}</div>
+    </div>
+    <div class="kpi" style="grid-column:1/-1;border-top:2px solid var(--accent);padding-top:14px">
+      <div class="klabel" style="color:var(--accent)">Estimated 10-year savings</div>
+      <div class="kvalue" style="font-size:1.15rem;color:${savings >= 0 ? 'var(--accent)' : 'var(--danger)'}">${fmt(savings)}</div>
+      <div class="ksub">Using preliminary V2G incentive before eligible-project-cost cap</div>
+    </div>
+  `;
+
+  const v2gBenefitRow = r.meets_4_hour_requirement
+    ? `<tr><td style="color:var(--accent)">BC Hydro V2G program benefit</td><td style="color:var(--fg3)">—</td><td style="color:var(--accent)">−${fmt(r.preliminary_project_incentive)}</td></tr>`
+    : r.v2g_available
+      ? `<tr><td style="color:var(--warn-border)">BC Hydro V2G program benefit</td><td style="color:var(--fg3)">—</td><td style="color:var(--warn-border)">Not eligible (${r.assumptions.v2g_hours} hr window &lt; 4 hr requirement)</td></tr>`
+      : '';
+  document.getElementById('breakdown-table').innerHTML = `
+    <thead><tr>
+      <th></th><th>Diesel</th><th>Electric</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Bus purchase</td><td>${fmt(r.fleet_conventional_purchase)}</td><td>${fmt(r.fleet_ev_purchase)}</td></tr>
+<tr><td>Fuel / electricity (10 yr)</td><td>${fmt(r.fleet_fuel_10y)}</td><td>${fmt(r.fleet_electricity_10y)}</td></tr>
+      <tr><td>Maintenance (10 yr)</td><td>${fmt(r.fleet_maintenance_conventional_10y)}</td><td>${fmt(r.fleet_maintenance_electric_10y)}</td></tr>
+      ${v2gBenefitRow}
+      <tr style="border-top:2px solid var(--border)"><td><strong>10-Year TCO</strong></td><td><strong>${fmt(r.fleet_conventional_tco)}</strong></td><td><strong>${fmt(r.fleet_ev_tco_with_v2g)}</strong></td></tr>
+    </tbody>
+  `;
+
+  const ic = document.getElementById('incentive-card');
+  if (r.v2g_available) {
+    ic.style.display = '';
+    const inc = r.bc_hydro_incentive;
+    const toggle = document.getElementById('how-calc-toggle');
+
+    if (r.meets_4_hour_requirement) {
+      document.getElementById('incentive-summary').innerHTML = `
+        <div class="incentive-summary-val">${fmt(inc.preliminary_incentive_per_bus_supporting)}</div>
+        <div class="incentive-summary-label">Preliminary one-time incentive — applied to electric TCO above</div>
+      `;
+      toggle.style.display = '';
+
+      const eligibleRow = `<tr><td><strong>Preliminary project incentive</strong></td><td><strong>${fmt(inc.preliminary_incentive_per_bus_supporting)}</strong></td></tr>`;
+      document.getElementById('incentive-table').innerHTML = `
+        <thead><tr><th>Component</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Nominated energy (kWh/event)</td><td>${inc.nominated_energy_kwh.toFixed(1)}</td></tr>
+          <tr><td>Nominated capacity (kW)</td><td>${inc.nominated_kw.toFixed(1)}</td></tr>
+          <tr><td>Energy component A ($10k × energy ÷ 4 hrs)</td><td>${fmt(inc.energy_component_a)}</td></tr>
+          <tr><td>Capacity component B ($10k × kW)</td><td>${fmt(inc.capacity_component_b)}</td></tr>
+          ${eligibleRow}
+        </tbody>
+      `;
+      document.getElementById('incentive-note').textContent = inc.label;
+    } else {
+      document.getElementById('incentive-summary').innerHTML = `
+        <div style="color:var(--warn-border);font-size:0.88rem">
+          ⚠ V2G window (${r.assumptions.v2g_hours} hrs) is below the 4-hour program requirement — no benefit applied to TCO.
+        </div>
+      `;
+      toggle.style.display = 'none';
+    }
+  } else {
+    ic.style.display = 'none';
+  }
+
+  const summaryRows = r.per_bus_results.map(b => `
+    <tr>
+      <td style="text-transform:capitalize">${b.bus_type}</td>
+      <td>${b.count}</td>
+      <td>${fmt(b.conventional_tco_10y * b.count)}</td>
+      <td>${fmt(b.ev_tco_before_v2g * b.count)}</td>
+    </tr>
+  `).join('');
+  document.getElementById('per-bus-table').innerHTML = `
+    <thead><tr>
+      <th>Bus type</th><th>Count</th><th>Conv. TCO (fleet)</th><th>EV TCO before V2G (fleet)</th>
+    </tr></thead>
+    <tbody>${summaryRows}</tbody>
+  `;
+
+  // Show contact capture after results
+  setTimeout(() => {
+    document.getElementById('contact-capture').classList.add('show');
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }, 600);
+}
+
+async function saveContact() {
+  const err = document.getElementById('err-contact');
+  err.classList.remove('show');
+
+  const contact_name = document.getElementById('contact_name').value.trim();
+  const company_name = document.getElementById('company_name').value.trim();
+  const email = document.getElementById('email').value.trim();
+
+  if (!contact_name || !company_name || !email) {
+    err.textContent = 'Please fill in your name, company, and email.';
+    err.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+  const payload = {
+    company_name, contact_name, email,
+    phone: document.getElementById('phone').value.trim() || null,
+    depot_location: document.getElementById('depot_location').value.trim() || null,
+    mini_count: state.mini,
+    midsize_count: state.midsize,
+    fullsize_count: state.fullsize,
+    available_5_9pm: state.available_5_9pm,
+    central_depot: state.central_depot,
+    daily_km: state.daily_km,
+    morning_start_hour: state.morning_start_hour,
+    morning_end_hour: state.morning_end_hour,
+    afternoon_start_hour: state.afternoon_start_hour,
+    afternoon_end_hour: state.afternoon_end_hour,
+  };
+
+  try {
+    const res = await fetch(`${API}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const e = await res.json();
+      throw new Error(Array.isArray(e.detail) ? e.detail.map(x => x.msg).join('; ') : e.detail);
+    }
+    document.querySelector('.capture-card').querySelector('h3').textContent = 'Thanks!';
+    document.querySelector('.capture-card').querySelector('p').textContent = "We've saved your results and will be in touch.";
+    document.querySelector('.field-row').style.display = 'none';
+    document.querySelectorAll('.field').forEach(f => f.style.display = 'none');
+    document.querySelector('.capture-actions').style.display = 'none';
+    document.getElementById('save-success').classList.add('show');
+    document.getElementById('restart-btn').style.display = '';
+  } catch (e) {
+    err.textContent = 'Error: ' + e.message;
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.innerHTML = 'Send me this report';
+  }
+}
+
+function toggleHowCalc() {
+  const detail = document.getElementById('how-calc-detail');
+  const btn = document.getElementById('how-calc-toggle');
+  const open = detail.style.display === 'none';
+  detail.style.display = open ? '' : 'none';
+  btn.textContent = open ? 'How this is calculated ▾' : 'How this is calculated ▸';
+}
+
+function skipContact() {
+  document.getElementById('contact-capture').style.display = 'none';
+  document.getElementById('restart-btn').style.display = '';
+}
+
+function restart() {
+  state.bc_confirmed = null;
+  state.available_5_9pm = null;
+  state.midday_charging_available = false;
+  state.mini = 0; state.midsize = 0; state.fullsize = 0;
+  state.daily_km = 80;
+  state.morning_start_hour = 7.0;
+  state.morning_end_hour = 9.0;
+  state.afternoon_start_hour = 14.5;
+  state.afternoon_end_hour = 17.0;
+  document.getElementById('midday-yes').classList.remove('selected');
+  document.getElementById('midday-no').classList.remove('selected');
+  ['mini','midsize','fullsize'].forEach(t => document.getElementById(t+'-count').textContent = '0');
+  document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('contact-capture').classList.remove('show');
+  document.getElementById('contact-capture').style.display = '';
+  document.getElementById('save-success').classList.remove('show');
+  document.getElementById('restart-btn').style.display = 'none';
+
+  const calcBtn = document.getElementById('calc-btn');
+  calcBtn.disabled = false;
+  calcBtn.innerHTML = 'See my results';
+
+  showStep(1);
+}
+
+// Init
+buildTimeOptions('morning_start', 7.0);
+buildTimeOptions('morning_end', 9.0);
+buildTimeOptions('afternoon_start', 14.5);
+buildTimeOptions('afternoon_end', 17.0);
+updateSchedulePreview();
+setProgress(1);
+</script>
