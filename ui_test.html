@@ -160,28 +160,21 @@
 <div class="shell">
   <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
 
-  <!-- Step 1: Fleet region / confirmation -->
+  <!-- Step 1: Intro / landing -->
   <div class="step active" id="step-1">
-    <div class="step-label">Step 1 of 4</div>
-    <h2>Are your buses based in British Columbia?</h2>
-    <p class="sub">This calculator is built for BC school bus operators using BC Hydro's V2G Schedule B incentive.</p>
-    <div class="options">
-      <button class="opt-btn" onclick="select(this,'bc_confirmed',true)">
-        <span class="opt-icon">✅</span>
-        <div class="opt-text"><strong>Yes, we operate in BC</strong><span>I want to see BC-specific V2G estimates</span></div>
-      </button>
-      <button class="opt-btn" onclick="select(this,'bc_confirmed',false)">
-        <span class="opt-icon">📍</span>
-        <div class="opt-text"><strong>No, we're outside BC</strong><span>Results will still show TCO savings without BC Hydro incentive</span></div>
-      </button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+      <img src="fuse-logo.png" height="36" alt="Fuse">
+      <span style="font-size:0.82rem;color:var(--fg3);font-weight:600">October 2026</span>
     </div>
-    <div class="error-msg" id="err-1">Please select an option to continue.</div>
-    <div class="nav"><button class="btn-next" onclick="next(1)">Continue</button></div>
+    <h2>BC V2G Fleet Savings Calculator</h2>
+    <p class="sub" style="margin-bottom:20px">The Fuse V2G Calculator gives school bus fleet operators a clear, 10-year cost comparison between keeping diesel buses and switching to electric. Enter your fleet size, daily routes, and operating schedule, and the calculator estimates your total cost of ownership for both options — including bus purchase, financing, fuel, and maintenance. If your buses are eligible for the Fuse V2G program, a Fuse Grant is applied that brings your electric fleet TCO to 10% below diesel, showing you exactly how much you save by making the switch. The whole process takes under two minutes.</p>
+    <div class="error-msg" id="err-1"></div>
+    <div class="nav"><button class="btn-next" onclick="showStep(2)">Get Started →</button></div>
   </div>
 
   <!-- Step 2: Fleet size -->
   <div class="step" id="step-2">
-    <div class="step-label">Step 2 of 4</div>
+    <div class="step-label">Step 1 of 3</div>
     <h2>How many buses are you looking to electrify?</h2>
     <p class="sub">Select the number of each bus type.</p>
     <div class="bus-grid">
@@ -219,7 +212,7 @@
 
   <!-- Step 3: Operating schedule -->
   <div class="step" id="step-3">
-    <div class="step-label">Step 3 of 4</div>
+    <div class="step-label">Step 2 of 3</div>
     <h2>What does a typical school day look like?</h2>
     <p class="sub">We use this to calculate battery state and the available V2G window.</p>
 
@@ -277,7 +270,7 @@
 
   <!-- Step 4: V2G evening availability -->
   <div class="step" id="step-4">
-    <div class="step-label">Step 4 of 4</div>
+    <div class="step-label">Step 3 of 3</div>
     <h2>Are your buses available to export power between 5 PM and 9 PM?</h2>
     <p class="sub">Buses return to base and stay connected during BC Hydro's 5–9 PM export window.</p>
     <div class="options">
@@ -377,7 +370,7 @@ const state = {
 
 let lastResults = null;
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 function setProgress(step) {
   document.getElementById('progress').style.width = ((step / TOTAL_STEPS) * 100) + '%';
