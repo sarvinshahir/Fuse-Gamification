@@ -549,7 +549,7 @@ function showResults(r) {
     </tr></thead>
     <tbody>
       <tr><td>Bus purchase</td><td>${fmt(r.fleet_conventional_purchase)}</td><td>${fmt(r.fleet_ev_purchase)}</td></tr>
-      <tr><td>Financing interest (8%, 10yr)</td><td>—</td><td>${fmt(r.fleet_ev_financing_cost)}</td></tr> 
+      <tr><td>Financing interest (8%, 10yr)</td><td>${fmt(r.fleet_conventional_financing_cost)}</td><td>${fmt(r.fleet_ev_financing_cost)}</td></tr>
 <tr><td>Fuel / electricity (10 yr)</td><td>${fmt(r.fleet_fuel_10y)}</td><td>${fmt(r.fleet_electricity_10y)}</td></tr>
       <tr><td>Maintenance (10 yr)</td><td>${fmt(r.fleet_maintenance_conventional_10y)}</td><td>${fmt(r.fleet_maintenance_electric_10y)}</td></tr>
       ${v2gBenefitRow}

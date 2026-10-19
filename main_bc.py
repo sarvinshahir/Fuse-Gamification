@@ -344,18 +344,26 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
     maintenance = calculate_10_year_maintenance()
 
     diesel_10y = annual_km * DIESEL_L_PER_KM * DIESEL_PRICE_PER_L * TCO_YEARS
-    conventional_tco = cfg["conventional_price"] + diesel_10y + maintenance["diesel_10y"]
+
+    # Diesel financing: 10% down, 90% financed at 8% for 10 years
+    monthly_rate = 0.08 / 12
+    n_payments = 10 * 12
+    diesel_down_payment = cfg["conventional_price"] * 0.10
+    diesel_loan_amount = cfg["conventional_price"] * 0.90
+    diesel_monthly_payment = diesel_loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+    financed_diesel_cost = diesel_down_payment + diesel_monthly_payment * n_payments
+    conventional_tco = financed_diesel_cost + diesel_10y + maintenance["diesel_10y"]
 
     annual_grid_kwh = annual_km * cfg["energy_per_km"] / CHARGING_EFFICIENCY
     electricity_10y = annual_grid_kwh * BC_ELECTRICITY_RATE * TCO_YEARS
-    # Charging infrastructure is Fuse's cost — excluded from fleet operator TCO
-    down_payment = cfg["ev_price"] * 0.10
-    loan_amount = cfg["ev_price"] * 0.90
-    monthly_rate = 0.08 / 12
-    n_payments = 10 * 12
-    monthly_payment = loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
-    financed_ev_cost = down_payment + monthly_payment * n_payments
+
+    # EV financing: 10% down, 90% financed at 8% for 10 years
+    ev_down_payment = cfg["ev_price"] * 0.10
+    ev_loan_amount = cfg["ev_price"] * 0.90
+    ev_monthly_payment = ev_loan_amount * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+    financed_ev_cost = ev_down_payment + ev_monthly_payment * n_payments
     ev_tco_before_v2g = financed_ev_cost + electricity_10y + maintenance["electric_10y"]
+
     meets_4_hour_requirement = schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"]
 
     # Technical V2G capacity — calculated regardless of program eligibility, for display only
@@ -391,7 +399,8 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
     return {
         "bus_type": bus_type,
         "model": cfg["model"],
-        "conventional_purchase": cfg["conventional_price"],
+        "conventional_purchase": round(financed_diesel_cost, 2),
+        "conventional_financing_cost": round(financed_diesel_cost - cfg["conventional_price"], 2),
         "ev_purchase": round(financed_ev_cost, 2),
         "ev_financing_cost": round(financed_ev_cost - cfg["ev_price"], 2),
         "diesel_fuel_10y": round(diesel_10y, 2),
@@ -422,6 +431,7 @@ def calculate_fleet_savings(inputs) -> dict:
     }
     fleet_size = inputs.mini_count + inputs.midsize_count + inputs.fullsize_count
     fleet_conventional_purchase = 0
+    fleet_conventional_financing_cost = 0
     fleet_ev_purchase = 0
     fleet_ev_financing_cost = 0
     fleet_conventional_tco = 0
@@ -449,9 +459,10 @@ def calculate_fleet_savings(inputs) -> dict:
             "net_savings_10y_per_bus_supporting": tco["net_savings_10y_per_bus_supporting"],
         })
 
-        fleet_conventional_purchase += BUS_CONFIG[bus_type]["conventional_price"] * count
-        fleet_ev_financing_cost += tco["ev_financing_cost"] * count
+        fleet_conventional_purchase += tco["conventional_purchase"] * count
+        fleet_conventional_financing_cost += tco["conventional_financing_cost"] * count
         fleet_ev_purchase += BUS_CONFIG[bus_type]["ev_price"] * count
+        fleet_ev_financing_cost += tco["ev_financing_cost"] * count
         fleet_conventional_tco += tco["_conventional_tco_exact"] * count
         fleet_ev_tco_before_v2g += tco["_ev_tco_before_v2g_exact"] * count
         fleet_diesel_10y += tco["_diesel_fuel_10y_exact"] * count
@@ -503,6 +514,7 @@ def calculate_fleet_savings(inputs) -> dict:
         "v2g_available": schedule["v2g_hours"] > 0,
         "meets_4_hour_requirement": schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"],
         "fleet_conventional_purchase": round(fleet_conventional_purchase, 2),
+        "fleet_conventional_financing_cost": round(fleet_conventional_financing_cost, 2),
         "fleet_ev_purchase": round(fleet_ev_purchase, 2),
         "fleet_ev_financing_cost": round(fleet_ev_financing_cost, 2),
         "fleet_fuel_10y": round(fleet_diesel_10y, 2),
