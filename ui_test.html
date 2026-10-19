@@ -354,7 +354,10 @@
       </div>
     </div>
 
-    <button class="restart-btn" id="restart-btn" style="display:none" onclick="restart()">← Start over</button>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn-back" onclick="showStep(4)">← Back</button>
+      <button class="restart-btn" id="restart-btn" style="display:none;flex:1" onclick="restart()">← Start over</button>
+    </div>
   </div>
 </div>
 
@@ -567,7 +570,6 @@ function showResults(r) {
   // Show contact capture after results
   setTimeout(() => {
     document.getElementById('contact-capture').classList.add('show');
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }, 600);
 }
 
