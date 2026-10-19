@@ -595,7 +595,7 @@ function showResults(r) {
     <div class="kpi" style="grid-column:1/-1;border-top:2px solid var(--accent);padding-top:14px">
       <div class="klabel" style="color:var(--accent)">Estimated 10-year savings</div>
       <div class="kvalue" style="font-size:1.15rem;color:${savings >= 0 ? 'var(--accent)' : 'var(--danger)'}">${fmt(savings)}</div>
-      <div class="ksub">Electric TCO is 10% less than diesel TCO with Fuse Grant applied</div>
+      <div class="ksub">Electric TCO is approximately 10% less than diesel TCO with Fuse Grant applied</div>
     </div>
   `;
 
@@ -626,7 +626,7 @@ function showResults(r) {
       <td style="text-transform:capitalize">${b.bus_type}</td>
       <td>${b.count}</td>
       <td>${fmt(convTco)}</td>
-      <td>approx. ${fmt(evTcoWithV2g)}</td>
+      <td>${fmt(evTcoWithV2g)}</td>
     </tr>
   `;
   }).join('');
