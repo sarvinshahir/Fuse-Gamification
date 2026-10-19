@@ -22,11 +22,6 @@ import math
 TCO_YEARS = 10
 
 SCHOOL_DRIVING_DAYS = 190
-# Number of BC Hydro dispatch events per year used for replenishment cost modelling.
-# The BC Hydro ESI manual does not specify an annual event count — events can occur
-# year-round, up to twice per day, called with 24-hour notice. This value is a
-# placeholder; replace it with a defensible assumption from your BC Hydro agreement
-# before using replenishment costs in any client-facing output.
 EXPECTED_DISPATCH_EVENTS_PER_YEAR = 50  # PLACEHOLDER — not from BC Hydro program docs
 
 DIESEL_PRICE_PER_L = 2.50
@@ -47,8 +42,6 @@ MAINTENANCE = {
     "electric_annual": 4_500,
 }
 
-# Charging infrastructure: ~$80,000 CAD per port (NRCan estimate for 50 kW installed port).
-# One port per bus assumed. Prototype assumption — actual cost is site-specific.
 CHARGING_INFRASTRUCTURE_PER_BUS = 80_000
 
 BUS_CONFIG = {
@@ -79,7 +72,7 @@ BC_HYDRO_INCENTIVE = {
     "energy_rate_factor": 10_000,
     "capacity_rate": 10_000,
     "required_duration_hours": 4,
-    "eligible_cost_cap": None,  # unknown — prototype uses min(a, b) only
+    "eligible_cost_cap": None,
 }
 
 MODEL_VERSION = "1.0.0-prototype-oct2026"
@@ -127,12 +120,11 @@ def init_db():
 # ---------------------------------------------------------------------------
 
 class FleetInputs(BaseModel):
-    """Fleet/operational inputs only — no contact info required."""
     mini_count: int = 0
     midsize_count: int = 0
     fullsize_count: int = 0
     available_5_9pm: bool = True
-    midday_charging_available: bool = False  # operator must confirm buses are plugged in during midday
+    midday_charging_available: bool = False
     daily_km: float = 80.0
     morning_start_hour: float = 7.0
     morning_end_hour: float = 9.0
@@ -166,7 +158,6 @@ class FleetInputs(BaseModel):
         return v
 
 class SurveyInputs(FleetInputs):
-    """Full submission — fleet inputs + contact info."""
     company_name: str
     contact_name: str
     email: str
@@ -190,7 +181,6 @@ class ContactInfo(BaseModel):
 # ---------------------------------------------------------------------------
 
 def derive_schedule(inputs) -> dict:
-    """Derive midday hours, V2G hours, and km split from schedule inputs."""
     daily_km = inputs.daily_km
     morning_duration = inputs.morning_end_hour - inputs.morning_start_hour
     afternoon_duration = inputs.afternoon_end_hour - inputs.afternoon_start_hour
@@ -204,7 +194,6 @@ def derive_schedule(inputs) -> dict:
         afternoon_km = daily_km / 2
 
     midday_hours = max(0.0, inputs.afternoon_start_hour - inputs.morning_end_hour)
-    # Midday charging only if the operator confirmed buses are plugged in during the gap
     midday_available = inputs.midday_charging_available and midday_hours > 0
 
     v2g_available_start = max(float(V2G_WINDOW_START), inputs.afternoon_end_hour)
@@ -290,17 +279,9 @@ def calculate_nominated_power(nominated_energy_kwh: float, v2g_hours: float) -> 
     return min(CHARGER_KW, nominated_energy_kwh / duration)
 
 def calculate_preliminary_bc_hydro_incentive(nominated_energy_kwh: float, nominated_kw: float, v2g_hours: float) -> dict:
-    """
-    BC Hydro V2G Schedule B incentive: min(a, b) where:
-      a = $10,000 × nominated_energy_kwh / required_duration_hours
-      b = $10,000 × nominated_kw
-    Duration is always the program's fixed 4-hour requirement, not actual available hours.
-    If the bus has fewer than 4 hours available it is not fully eligible — the caller should
-    check meets_4_hour_requirement before using this incentive in a TCO.
-    """
     factor = BC_HYDRO_INCENTIVE["energy_rate_factor"]
     cap_rate = BC_HYDRO_INCENTIVE["capacity_rate"]
-    required_duration = BC_HYDRO_INCENTIVE["required_duration_hours"]  # 4 — fixed program requirement
+    required_duration = BC_HYDRO_INCENTIVE["required_duration_hours"]
     a = factor * nominated_energy_kwh / required_duration
     b = cap_rate * nominated_kw
     c = BC_HYDRO_INCENTIVE["eligible_cost_cap"]
@@ -366,7 +347,6 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
 
     meets_4_hour_requirement = schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"]
 
-    # Technical V2G capacity — calculated regardless of program eligibility, for display only
     if schedule["v2g_hours"] > 0:
         nom_energy = calculate_nominated_energy(bus_type, schedule)
         nom_kw = calculate_nominated_power(nom_energy, schedule["v2g_hours"])
@@ -374,7 +354,6 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
         nom_energy = 0.0
         nom_kw = 0.0
 
-    # Financial model — only enters TCO if the fleet meets the 4-hour program requirement
     if meets_4_hour_requirement and nom_energy > 0:
         incentive_result = calculate_preliminary_bc_hydro_incentive(nom_energy, nom_kw, schedule["v2g_hours"])
         replenishment = calculate_v2g_replenishment_cost(bus_type, schedule)
@@ -385,14 +364,13 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
             "eligible_cost_cap_c": None, "preliminary_incentive_per_bus_supporting": 0,
             "is_capped": False, "meets_4_hour_requirement": meets_4_hour_requirement,
             "label": (
-                f"V2G window ({round(schedule['v2g_hours'], 1)} hrs) is below the 4-hour program requirement — no V2G costs or incentive applied to TCO"
+                f"V2G window ({round(schedule['v2g_hours'], 1)} hrs) is below the 4-hour program requirement"
                 if schedule["v2g_hours"] > 0
-                else "V2G not available — no incentive calculated"
+                else "V2G not available"
             ),
         }
         replenishment_10y = 0.0
 
-    # V2G replenishment is Fuse's cost — excluded from fleet operator TCO
     ev_tco_with_v2g = ev_tco_before_v2g - incentive_result["preliminary_incentive_per_bus_supporting"]
     net_savings = conventional_tco - ev_tco_with_v2g
 
@@ -409,7 +387,6 @@ def calculate_10_year_tco(bus_type: str, schedule: dict) -> dict:
         "ev_maintenance_10y": maintenance["electric_10y"],
         "conventional_tco": round(conventional_tco, 2),
         "ev_tco_before_v2g": round(ev_tco_before_v2g, 2),
-        # Unrounded values for fleet-level aggregation — never used for display
         "_conventional_tco_exact": conventional_tco,
         "_ev_tco_before_v2g_exact": ev_tco_before_v2g,
         "_diesel_fuel_10y_exact": diesel_10y,
@@ -470,14 +447,13 @@ def calculate_fleet_savings(inputs) -> dict:
         fleet_diesel_maint_10y += tco["diesel_maintenance_10y"] * count
         fleet_ev_maint_10y += tco["ev_maintenance_10y"] * count
 
-        # Technical capacity — accumulate for display regardless of eligibility
         if schedule["v2g_hours"] > 0:
             total_nominated_energy += tco["nominated_energy_kwh"] * count
             total_nominated_kw += tco["nominated_kw"] * count
 
     fleet_meets_4_hour = schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"]
 
-    # Financial model — project incentive and replenishment only enter TCO if eligible
+    # BC Hydro incentive — calculated internally for Fuse records, not shown to fleet owners
     if fleet_meets_4_hour and total_nominated_energy > 0:
         agg_nominated_kw = min(total_nominated_kw, CHARGER_KW * fleet_size)
         project_incentive = calculate_preliminary_bc_hydro_incentive(
@@ -492,27 +468,27 @@ def calculate_fleet_savings(inputs) -> dict:
             "is_capped": False,
             "meets_4_hour_requirement": fleet_meets_4_hour,
             "label": (
-                f"V2G window ({round(schedule['v2g_hours'], 1)} hrs) is below the 4-hour program requirement — no V2G costs or incentive applied to TCO"
+                f"V2G window ({round(schedule['v2g_hours'], 1)} hrs) is below the 4-hour program requirement"
                 if schedule["v2g_hours"] > 0
-                else "V2G not available — no incentive calculated"
+                else "V2G not available"
             ),
         }
 
-    # Fleet-level incentive label uses project-wide name
     preliminary_project_incentive = project_incentive["preliminary_incentive_per_bus_supporting"]
 
-    # V2G replenishment is Fuse's cost — excluded from fleet operator TCO
-    fleet_ev_tco_with_v2g = (
-        fleet_ev_tco_before_v2g
-        - preliminary_project_incentive
-    )
+    # Fuse Grant: the subsidy shown to fleet owners
+    # EV TCO is set to exactly 10% less than diesel TCO.
+    # Fuse Grant = whatever makes up the difference.
+    target_ev_tco = fleet_conventional_tco * 0.90
+    fuse_grant = fleet_ev_tco_before_v2g - target_ev_tco
+    fleet_ev_tco_with_v2g = target_ev_tco
     fleet_net_savings = fleet_conventional_tco - fleet_ev_tco_with_v2g
 
     return {
         "fleet_size": fleet_size,
         "bus_counts": counts,
         "v2g_available": schedule["v2g_hours"] > 0,
-        "meets_4_hour_requirement": schedule["v2g_hours"] >= BC_HYDRO_INCENTIVE["required_duration_hours"],
+        "meets_4_hour_requirement": fleet_meets_4_hour,
         "fleet_conventional_purchase": round(fleet_conventional_purchase, 2),
         "fleet_conventional_financing_cost": round(fleet_conventional_financing_cost, 2),
         "fleet_ev_purchase": round(fleet_ev_purchase, 2),
@@ -523,6 +499,9 @@ def calculate_fleet_savings(inputs) -> dict:
         "fleet_maintenance_electric_10y": round(fleet_ev_maint_10y, 2),
         "fleet_conventional_tco": round(fleet_conventional_tco, 2),
         "fleet_ev_tco_before_v2g": round(fleet_ev_tco_before_v2g, 2),
+        # Fuse Grant — shown to fleet owners as the V2G benefit
+        "fuse_grant": round(fuse_grant, 2),
+        # BC Hydro incentive — internal only, not displayed in UI
         "preliminary_project_incentive": round(preliminary_project_incentive, 2),
         "bc_hydro_incentive": {
             "nominated_energy_kwh": round(total_nominated_energy, 2),
@@ -556,12 +535,7 @@ def calculate_fleet_savings(inputs) -> dict:
         },
         "disclaimer": (
             "Results are illustrative estimates for the October 2026 prototype. "
-            "The BC Hydro V2G incentive is a one-time upfront payment in exchange for a "
-            "10-year commitment to maintain nominated V2G capacity and meet BC Hydro "
-            "performance requirements (≥85% nominated capacity for ≥85% of dispatch events). "
-            "The incentive shown is preliminary and uncapped — the final approved amount "
-            "depends on the eligible-project-cost cap, program eligibility, and your "
-            "specific BC Hydro agreement. "
+            "The Fuse Grant represents a V2G program benefit applied to reduce your 10-year electric TCO. "
             "Maintenance, fuel, and electricity figures are modelling assumptions and have "
             "not been validated against actual fleet data."
         ),

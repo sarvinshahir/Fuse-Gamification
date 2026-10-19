@@ -308,15 +308,7 @@
       <h3>Fleet Cost Breakdown (10 years)</h3>
       <div style="overflow-x:auto"><table id="breakdown-table"></table></div>
     </div>
-    <div class="rcard" id="incentive-card">
-      <h3>BC Hydro V2G Program Benefit</h3>
-      <div id="incentive-summary"></div>
-      <button class="how-calc-btn" id="how-calc-toggle" onclick="toggleHowCalc()" style="display:none">How this is calculated ▸</button>
-      <div id="how-calc-detail" style="display:none;margin-top:14px">
-        <div style="overflow-x:auto"><table id="incentive-table"></table></div>
-        <div class="note" id="incentive-note"></div>
-      </div>
-    </div>
+    <!-- BC Hydro incentive card hidden — internal only -->
     <div class="rcard">
       <h3>Fleet Summary by Bus Type</h3>
       <div style="overflow-x:auto"><table id="per-bus-table"></table></div>
@@ -328,7 +320,7 @@
     <div id="contact-capture">
       <div class="capture-card">
         <h3>Want a copy of this report?</h3>
-        <p>Enter your details and we'll send you a summary along with next steps on the BC Hydro V2G program.</p>
+        <p>Enter your details and we'll send you a summary along with next steps on the Fuse V2G program.</p>
         <div class="field-row">
           <div class="field">
             <label>First name</label>
@@ -529,19 +521,19 @@ function showResults(r) {
     <div class="kpi highlight">
       <div class="klabel">10-Year Electric TCO</div>
       <div class="kvalue">${fmt(r.fleet_ev_tco_with_v2g)}</div>
-      <div class="ksub">${r.meets_4_hour_requirement ? 'After BC Hydro V2G program benefit' : 'No V2G benefit applied'}</div>
+      <div class="ksub">${r.meets_4_hour_requirement ? 'After Fuse Grant' : 'No V2G benefit applied'}</div>
     </div>
     <div class="kpi" style="grid-column:1/-1;border-top:2px solid var(--accent);padding-top:14px">
       <div class="klabel" style="color:var(--accent)">Estimated 10-year savings</div>
       <div class="kvalue" style="font-size:1.15rem;color:${savings >= 0 ? 'var(--accent)' : 'var(--danger)'}">${fmt(savings)}</div>
-      <div class="ksub">Using preliminary V2G incentive before eligible-project-cost cap</div>
+      <div class="ksub">Electric TCO is 10% less than diesel TCO with Fuse Grant applied</div>
     </div>
   `;
 
-  const v2gBenefitRow = r.meets_4_hour_requirement
-    ? `<tr><td style="color:var(--accent)">BC Hydro V2G program benefit</td><td style="color:var(--fg3)">—</td><td style="color:var(--accent)">−${fmt(r.preliminary_project_incentive)}</td></tr>`
+  const fuseGrantRow = r.meets_4_hour_requirement
+    ? `<tr><td style="color:var(--accent)">Fuse Grant</td><td style="color:var(--fg3)">—</td><td style="color:var(--accent)">−${fmt(r.fuse_grant)}</td></tr>`
     : r.v2g_available
-      ? `<tr><td style="color:var(--warn-border)">BC Hydro V2G program benefit</td><td style="color:var(--fg3)">—</td><td style="color:var(--warn-border)">Not eligible (${r.assumptions.v2g_hours} hr window &lt; 4 hr requirement)</td></tr>`
+      ? `<tr><td style="color:var(--warn-border)">Fuse Grant</td><td style="color:var(--fg3)">—</td><td style="color:var(--warn-border)">Not eligible (${r.assumptions.v2g_hours} hr window &lt; 4 hr requirement)</td></tr>`
       : '';
   document.getElementById('breakdown-table').innerHTML = `
     <thead><tr>
@@ -550,49 +542,12 @@ function showResults(r) {
     <tbody>
       <tr><td>Bus purchase</td><td>${fmt(r.fleet_conventional_purchase)}</td><td>${fmt(r.fleet_ev_purchase)}</td></tr>
       <tr><td>Financing interest (8%, 10yr)</td><td>${fmt(r.fleet_conventional_financing_cost)}</td><td>${fmt(r.fleet_ev_financing_cost)}</td></tr>
-<tr><td>Fuel / electricity (10 yr)</td><td>${fmt(r.fleet_fuel_10y)}</td><td>${fmt(r.fleet_electricity_10y)}</td></tr>
+      <tr><td>Fuel / electricity (10 yr)</td><td>${fmt(r.fleet_fuel_10y)}</td><td>${fmt(r.fleet_electricity_10y)}</td></tr>
       <tr><td>Maintenance (10 yr)</td><td>${fmt(r.fleet_maintenance_conventional_10y)}</td><td>${fmt(r.fleet_maintenance_electric_10y)}</td></tr>
-      ${v2gBenefitRow}
+      ${fuseGrantRow}
       <tr style="border-top:2px solid var(--border)"><td><strong>10-Year TCO</strong></td><td><strong>${fmt(r.fleet_conventional_tco)}</strong></td><td><strong>${fmt(r.fleet_ev_tco_with_v2g)}</strong></td></tr>
     </tbody>
   `;
-
-  const ic = document.getElementById('incentive-card');
-  if (r.v2g_available) {
-    ic.style.display = '';
-    const inc = r.bc_hydro_incentive;
-    const toggle = document.getElementById('how-calc-toggle');
-
-    if (r.meets_4_hour_requirement) {
-      document.getElementById('incentive-summary').innerHTML = `
-        <div class="incentive-summary-val">${fmt(inc.preliminary_incentive_per_bus_supporting)}</div>
-        <div class="incentive-summary-label">Preliminary one-time incentive — applied to electric TCO above</div>
-      `;
-      toggle.style.display = '';
-
-      const eligibleRow = `<tr><td><strong>Preliminary project incentive</strong></td><td><strong>${fmt(inc.preliminary_incentive_per_bus_supporting)}</strong></td></tr>`;
-      document.getElementById('incentive-table').innerHTML = `
-        <thead><tr><th>Component</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td>Nominated energy (kWh/event)</td><td>${inc.nominated_energy_kwh.toFixed(1)}</td></tr>
-          <tr><td>Nominated capacity (kW)</td><td>${inc.nominated_kw.toFixed(1)}</td></tr>
-          <tr><td>Energy component A ($10k × energy ÷ 4 hrs)</td><td>${fmt(inc.energy_component_a)}</td></tr>
-          <tr><td>Capacity component B ($10k × kW)</td><td>${fmt(inc.capacity_component_b)}</td></tr>
-          ${eligibleRow}
-        </tbody>
-      `;
-      document.getElementById('incentive-note').textContent = inc.label;
-    } else {
-      document.getElementById('incentive-summary').innerHTML = `
-        <div style="color:var(--warn-border);font-size:0.88rem">
-          ⚠ V2G window (${r.assumptions.v2g_hours} hrs) is below the 4-hour program requirement — no benefit applied to TCO.
-        </div>
-      `;
-      toggle.style.display = 'none';
-    }
-  } else {
-    ic.style.display = 'none';
-  }
 
   const summaryRows = r.per_bus_results.map(b => `
     <tr>
@@ -604,7 +559,7 @@ function showResults(r) {
   `).join('');
   document.getElementById('per-bus-table').innerHTML = `
     <thead><tr>
-      <th>Bus type</th><th>Count</th><th>Conv. TCO (fleet)</th><th>EV TCO before V2G (fleet)</th>
+      <th>Bus type</th><th>Count</th><th>Conv. TCO (fleet)</th><th>EV TCO before grant (fleet)</th>
     </tr></thead>
     <tbody>${summaryRows}</tbody>
   `;
@@ -675,14 +630,6 @@ async function saveContact() {
   }
 }
 
-function toggleHowCalc() {
-  const detail = document.getElementById('how-calc-detail');
-  const btn = document.getElementById('how-calc-toggle');
-  const open = detail.style.display === 'none';
-  detail.style.display = open ? '' : 'none';
-  btn.textContent = open ? 'How this is calculated ▾' : 'How this is calculated ▸';
-}
-
 function skipContact() {
   document.getElementById('contact-capture').style.display = 'none';
   document.getElementById('restart-btn').style.display = '';
@@ -698,20 +645,12 @@ function restart() {
   state.morning_end_hour = 9.0;
   state.afternoon_start_hour = 14.5;
   state.afternoon_end_hour = 17.0;
-  document.getElementById('midday-yes').classList.remove('selected');
-  document.getElementById('midday-no').classList.remove('selected');
-  ['mini','midsize','fullsize'].forEach(t => document.getElementById(t+'-count').textContent = '0');
   document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('results').style.display = 'none';
+  ['mini','midsize','fullsize'].forEach(t => document.getElementById(t+'-count').textContent = '0');
   document.getElementById('contact-capture').classList.remove('show');
-  document.getElementById('contact-capture').style.display = '';
-  document.getElementById('save-success').classList.remove('show');
   document.getElementById('restart-btn').style.display = 'none';
-
-  const calcBtn = document.getElementById('calc-btn');
-  calcBtn.disabled = false;
-  calcBtn.innerHTML = 'See my results';
-
+  document.getElementById('calc-btn').disabled = false;
+  document.getElementById('calc-btn').textContent = 'See my results';
   showStep(1);
 }
 
