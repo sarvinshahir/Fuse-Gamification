@@ -501,7 +501,7 @@ function savePartial(step) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: SESSION_ID, step: String(step), data: state }),
-  }).catch(() => {});
+  }).catch(e => console.error('savePartial failed:', e));
 }
 
 function next(step) {
