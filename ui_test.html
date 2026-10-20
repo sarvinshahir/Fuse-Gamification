@@ -511,6 +511,7 @@ function next(step) {
     state.province = document.getElementById('province_input').value.trim();
     state.city = document.getElementById('city_input').value.trim();
     if (!state.province || !state.city) { err.classList.add('show'); return; }
+    savePartial(step);
     showStep(4); return;
   }
   if (step === 4 && (state.mini + state.midsize + state.fullsize) === 0) { err.classList.add('show'); return; }
