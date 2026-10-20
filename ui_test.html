@@ -496,22 +496,27 @@ function updateSchedulePreview() {
     `V2G window: ${v2g.toFixed(1)} hrs (5–9 PM)`;
 }
 
-function savePartial(step) {
-  fetch(`${API}/partial`, {
+async function savePartial(step) {
+  const response = await fetch(`${API}/partial`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: SESSION_ID, step: String(step), data: state }),
-  }).catch(e => console.error('savePartial failed:', e));
+    body: JSON.stringify({ session_id: SESSION_ID, step: String(step), data: { ...state } }),
+  });
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Save failed (${response.status}): ${details}`);
+  }
+  return await response.json();
 }
 
-function next(step) {
+async function next(step) {
   const err = document.getElementById('err-' + step);
   err.classList.remove('show');
   if (step === 2) {
     state.province = document.getElementById('province_input').value.trim();
     state.city = document.getElementById('city_input').value.trim();
     if (!state.province || !state.city) { err.classList.add('show'); return; }
-    savePartial(step);
+    try { await savePartial(step); } catch(e) { err.textContent = 'Unable to save: ' + e.message; err.classList.add('show'); return; }
     showStep(4); return;
   }
   if (step === 4 && (state.mini + state.midsize + state.fullsize) === 0) { err.classList.add('show'); return; }
@@ -521,7 +526,7 @@ function next(step) {
     if (state.afternoon_start_hour <= state.morning_end_hour) { err.textContent = 'Afternoon start must be after morning end.'; err.classList.add('show'); return; }
     if (state.afternoon_end_hour <= state.afternoon_start_hour) { err.textContent = 'Afternoon end must be after afternoon start.'; err.classList.add('show'); return; }
   }
-  savePartial(step);
+  try { await savePartial(step); } catch(e) { err.textContent = 'Unable to save: ' + e.message; err.classList.add('show'); return; }
   showStep(step + 1);
 }
 
@@ -556,6 +561,7 @@ async function calculate() {
   };
 
   try {
+    await savePartial(6);
     const res = await fetch(`${API}/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

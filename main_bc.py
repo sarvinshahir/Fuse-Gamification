@@ -638,7 +638,10 @@ def save_partial(body: PartialStep):
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO partial_steps (session_id, step, data) VALUES (%s, %s, %s)",
+        """INSERT INTO partial_steps (session_id, step, data, updated_at)
+           VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+           ON CONFLICT (session_id, step)
+           DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP""",
         (body.session_id, body.step, json.dumps(body.data))
     )
     conn.commit()
