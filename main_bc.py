@@ -10,10 +10,11 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import Optional
-import sqlite3
 import json
 import os
 import math
+import psycopg2
+import psycopg2.extras
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -76,22 +77,22 @@ BC_HYDRO_INCENTIVE = {
 }
 
 MODEL_VERSION = "1.0.0-prototype-oct2026"
-DB_PATH = os.environ.get("DB_PATH", "v2g_calculator.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 def init_db():
     conn = get_db()
-    conn.execute("""
+    cur = conn.cursor()
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             company_name TEXT,
             contact_name TEXT,
@@ -103,18 +104,18 @@ def init_db():
             model_version TEXT
         )
     """)
-    conn.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS partial_steps (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             session_id TEXT,
             step TEXT,
             data TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.execute("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             contact_name TEXT,
             company_name TEXT,
@@ -140,6 +141,7 @@ def init_db():
         )
     """)
     conn.commit()
+    cur.close()
     conn.close()
 
 # ---------------------------------------------------------------------------
@@ -634,11 +636,13 @@ def survey():
 @app.post("/partial", summary="Save partial wizard step")
 def save_partial(body: PartialStep):
     conn = get_db()
-    conn.execute(
-        "INSERT INTO partial_steps (session_id, step, data) VALUES (?, ?, ?)",
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO partial_steps (session_id, step, data) VALUES (%s, %s, %s)",
         (body.session_id, body.step, json.dumps(body.data))
     )
     conn.commit()
+    cur.close()
     conn.close()
     return {"status": "ok"}
 
@@ -660,10 +664,11 @@ def submit(inputs: SurveyInputs):
         raise HTTPException(status_code=422, detail=errors)
     results = calculate_fleet_savings(inputs)
     conn = get_db()
-    conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         """INSERT INTO submissions
            (company_name, contact_name, email, phone, depot_location, inputs, results, model_version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (
             inputs.company_name,
             inputs.contact_name,
@@ -675,7 +680,8 @@ def submit(inputs: SurveyInputs):
             MODEL_VERSION,
         )
     )
-    conn.execute(
+    submission_id = cur.fetchone()["id"]
+    cur.execute(
         """INSERT INTO leads
            (contact_name, company_name, email, phone, depot_location,
             mini_count, midsize_count, fullsize_count,
@@ -683,7 +689,7 @@ def submit(inputs: SurveyInputs):
             midday_pct_base, available_5_9pm,
             conv_tco, ev_tco_before_grant, fuse_grant, ev_tco_with_fuse_grant,
             bc_hydro_incentive, net_savings)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (
             inputs.contact_name,
             inputs.company_name,
@@ -709,7 +715,7 @@ def submit(inputs: SurveyInputs):
         )
     )
     conn.commit()
-    submission_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    cur.close()
     conn.close()
     return {
         "status": "submitted",
@@ -721,10 +727,11 @@ def submit(inputs: SurveyInputs):
 @app.post("/contact", summary="Save contact information")
 def contact(info: ContactInfo):
     conn = get_db()
-    conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         """INSERT INTO submissions
            (company_name, contact_name, email, phone, depot_location, inputs, results, model_version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
         (
             info.company_name or "",
             info.contact_name,
@@ -737,5 +744,26 @@ def contact(info: ContactInfo):
         )
     )
     conn.commit()
+    cur.close()
     conn.close()
     return {"status": "saved", "contact_name": info.contact_name, "email": info.email}
+
+@app.get("/admin/leads", summary="View all leads")
+def admin_leads():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM leads ORDER BY created_at DESC")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.get("/admin/partial", summary="View partial steps")
+def admin_partial():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM partial_steps ORDER BY updated_at DESC LIMIT 200")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
