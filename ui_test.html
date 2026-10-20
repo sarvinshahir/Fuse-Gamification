@@ -353,6 +353,7 @@
     <!-- Contact capture — shown below results -->
     <div id="contact-capture">
       <div class="capture-card">
+        <h3>Get in touch</h3>
         <p>Enter your details and we'll be in touch about next steps on the Fuse V2G program.</p>
         <div class="field-row">
           <div class="field">
@@ -411,6 +412,7 @@ const state = {
 };
 
 let lastResults = null;
+const SESSION_ID = crypto.randomUUID();
 
 const TOTAL_STEPS = 5;
 
@@ -494,6 +496,14 @@ function updateSchedulePreview() {
     `V2G window: ${v2g.toFixed(1)} hrs (5–9 PM)`;
 }
 
+function savePartial(step) {
+  fetch(`${API}/partial`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: SESSION_ID, step: String(step), data: state }),
+  }).catch(() => {});
+}
+
 function next(step) {
   const err = document.getElementById('err-' + step);
   err.classList.remove('show');
@@ -510,6 +520,7 @@ function next(step) {
     if (state.afternoon_start_hour <= state.morning_end_hour) { err.textContent = 'Afternoon start must be after morning end.'; err.classList.add('show'); return; }
     if (state.afternoon_end_hour <= state.afternoon_start_hour) { err.textContent = 'Afternoon end must be after afternoon start.'; err.classList.add('show'); return; }
   }
+  savePartial(step);
   showStep(step + 1);
 }
 
