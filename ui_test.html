@@ -691,11 +691,14 @@ async function saveContact() {
       const e = await res.json();
       throw new Error(Array.isArray(e.detail) ? e.detail.map(x => x.msg).join('; ') : e.detail);
     }
-    document.querySelector('.capture-card').querySelector('h3').textContent = 'Thanks!';
-    document.querySelector('.capture-card').querySelector('p').textContent = "We've saved your results and will be in touch.";
-    document.querySelector('.field-row').style.display = 'none';
+    const cc = document.querySelector('.capture-card');
+    if (cc) {
+      const h3 = cc.querySelector('h3'); if (h3) h3.textContent = 'Thanks!';
+      const p = cc.querySelector('p'); if (p) p.textContent = "We've saved your results and will be in touch.";
+    }
+    const fr = document.querySelector('.field-row'); if (fr) fr.style.display = 'none';
     document.querySelectorAll('.field').forEach(f => f.style.display = 'none');
-    document.querySelector('.capture-actions').style.display = 'none';
+    const ca = document.querySelector('.capture-actions'); if (ca) ca.style.display = 'none';
     document.getElementById('save-success').classList.add('show');
     document.getElementById('restart-btn').style.display = '';
   } catch (e) {
