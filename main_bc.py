@@ -112,6 +112,33 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            contact_name TEXT,
+            company_name TEXT,
+            email TEXT,
+            phone TEXT,
+            depot_location TEXT,
+            mini_count INTEGER,
+            midsize_count INTEGER,
+            fullsize_count INTEGER,
+            daily_km REAL,
+            morning_start REAL,
+            morning_end REAL,
+            afternoon_start REAL,
+            afternoon_end REAL,
+            midday_pct_base INTEGER,
+            available_5_9pm INTEGER,
+            conv_tco REAL,
+            ev_tco_before_grant REAL,
+            fuse_grant REAL,
+            ev_tco_with_fuse_grant REAL,
+            bc_hydro_incentive REAL,
+            net_savings REAL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -590,7 +617,6 @@ def startup():
 def root():
     return FileResponse("ui_test.html")
 
-
 @app.get("/fuse-logo.png")
 def fuse_logo():
     return FileResponse("fuse-logo.png", media_type="image/png")
@@ -605,16 +631,16 @@ def survey():
     </body></html>
     """
 
-@app.post("/save-step", summary="Save partial survey answers")
-def save_step(step: PartialStep):
+@app.post("/partial", summary="Save partial wizard step")
+def save_partial(body: PartialStep):
     conn = get_db()
     conn.execute(
         "INSERT INTO partial_steps (session_id, step, data) VALUES (?, ?, ?)",
-        (step.session_id, step.step, json.dumps(step.data))
+        (body.session_id, body.step, json.dumps(body.data))
     )
     conn.commit()
     conn.close()
-    return {"status": "saved", "session_id": step.session_id, "step": step.step}
+    return {"status": "ok"}
 
 @app.post("/calculate", summary="Calculate V2G and TCO results (no contact info required)")
 def calculate(inputs: FleetInputs):
@@ -647,6 +673,39 @@ def submit(inputs: SurveyInputs):
             json.dumps(inputs.dict()),
             json.dumps(results),
             MODEL_VERSION,
+        )
+    )
+    conn.execute(
+        """INSERT INTO leads
+           (contact_name, company_name, email, phone, depot_location,
+            mini_count, midsize_count, fullsize_count,
+            daily_km, morning_start, morning_end, afternoon_start, afternoon_end,
+            midday_pct_base, available_5_9pm,
+            conv_tco, ev_tco_before_grant, fuse_grant, ev_tco_with_fuse_grant,
+            bc_hydro_incentive, net_savings)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            inputs.contact_name,
+            inputs.company_name,
+            inputs.email,
+            inputs.phone or "",
+            inputs.depot_location or "",
+            inputs.mini_count,
+            inputs.midsize_count,
+            inputs.fullsize_count,
+            inputs.daily_km,
+            inputs.morning_start_hour,
+            inputs.morning_end_hour,
+            inputs.afternoon_start_hour,
+            inputs.afternoon_end_hour,
+            getattr(inputs, 'midday_pct_base', 50),
+            1 if inputs.available_5_9pm else 0,
+            results["fleet_conventional_tco"],
+            results["fleet_ev_tco_before_v2g"],
+            results["fuse_grant"],
+            results["fleet_ev_tco_with_v2g"],
+            results["bc_hydro_incentive"]["preliminary_incentive_per_bus_supporting"],
+            results["fleet_net_savings_10y"],
         )
     )
     conn.commit()
